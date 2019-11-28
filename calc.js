@@ -30,6 +30,8 @@ class EffectsState
     this.spa413 = 0;
     this.spa461 = 0;
     this.spa462 = 0;
+    this.spa483 = 0;
+    this.spa507 = 0;
   }
 }
 
@@ -190,7 +192,8 @@ class PlayerState
     {
       switch(spa)
       {
-        case 124: case 127: case 286: case 296: case 297: case 302: case 303: case 399: case 413: case 461: case 462:
+        case 124: case 127: case 286: case 296: case 297: case 302: case 303: case 399: 
+        case 413: case 461: case 462: case 483: case 507:
           finalEffects['spa' + spa] = value;
           break;
         case 170:
@@ -254,9 +257,9 @@ class PlayerState
           case 10: case 148:  // 10 means the slot is empty, 148 is stacking related
             break;
           // Ignore Other Focus Effects
-          case 2: case 15: case 46: case 47: case 48: case 49: case 50: case 119: case 125: case 128: case 129: case 130: case 131: case 132: 
-          case 133: case 161: case 162: case 169: case 185: case 216: case 218: case 274: case 279: case 280: case 319: case 364: case 370:
-          case 374: case 474: case 496:
+          case 0: case 1: case 2: case 15: case 36: case 46: case 47: case 48: case 49: case 50: case 119: case 125: case 128: case 129: case 130: 
+          case 131: case 132: case 133: case 161: case 162: case 169: case 185: case 200: case 216: case 218: case 274: case 279: case 280:
+          case 319: case 330: case 364: case 370: case 374: case 459: case 474: case 496:
             // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
             if (this.processUpdates(category, updatedValue, checks, effect, chargedSpells))
             {
@@ -280,7 +283,7 @@ class PlayerState
             break;
 
           // Spell Focus - supports a range of values
-          case 124: case 127: case 286: case 296: case 297: case 302: case 303: case 399: case 413: case 461: case 462:        
+          case 124: case 127: case 286: case 296: case 297: case 302: case 303: case 399: case 413: case 461: case 462: case 483: case 507:   
             // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
             if (this.processUpdates(category, updatedValue, checks, effect, chargedSpells))
             {
@@ -511,14 +514,14 @@ class Spell
             this.actualCastTime = this.castTime - (this.castTime * finalEffects.spa127 / 100);
           }
       
-          let isNuke = slot[SPA] === 79 || this.duration === 0;
-          let ticks = isNuke ? 1 : this.duration + 1;
-      
+          let ticks = this.duration === 0 ? 1 : this.duration + 1;
+          let isNuke = (this.duration === 0 || slot[SPA] === 79);
+          let count = isNuke ? 1 : ticks;
           // ticks is a custom field that I set to 1 for nukes
-          for (let i = 0; i < ticks; i++)
+          for (let i = 0; i < count; i++)
           {
             // did the spell crit?
-            let crit = (Math.random() * 100 <= (isNuke ? finalEffects.nukeCritChance : finalEffects.doTCritChance));
+            let crit = (Math.random() * 100 <= (this.duration === 0 ? finalEffects.nukeCritChance : finalEffects.doTCritChance));
       
             if (i > 0)
             {
@@ -528,7 +531,7 @@ class Spell
             }
       
             // add damage for one hit / tick
-            results.push({ damage: this.calculateDamage(state, Math.abs(slot[BASE1]), crit, ticks, finalEffects), crit: crit, spa: slot[SPA] });
+            results.push({ damage: this.calculateDamage(state, Math.abs(slot[BASE1]), crit, isNuke, ticks, finalEffects), crit: crit, spa: slot[SPA] });
       
             if (doTwincast)
             {
@@ -537,7 +540,7 @@ class Spell
                 crit = (Math.random() * 100 <= finalEffects.nukeCritChance);
                 finalEffects = state.buildEffects(this, chargedSpells, false);
                 this.charge(state, chargedSpells);
-                results.push({ damage: this.calculateDamage(state, Math.abs(slot[BASE1]), crit, ticks, finalEffects), crit: crit, spa: slot[SPA] });
+                results.push({ damage: this.calculateDamage(state, Math.abs(slot[BASE1]), crit, isNuke, ticks, finalEffects), crit: crit, spa: slot[SPA] });
               }
               else
               {
@@ -557,38 +560,62 @@ class Spell
     return allResults;
   }
 
-  calculateDamage(state, baseDamage, crit, ticks, finalEffects)
+  calculateDamage(state, baseDamage, crit, isNuke, ticks, finalEffects)
   {
-    let total = 0;
-    let critMultiplier;
+    //console.debug(finalEffects);
 
+    // effective damage is used in other calcuations
     let effectiveDamage = baseDamage + Spell.truncAsDec32(finalEffects.spa413 * baseDamage / 100);
-    let beforeCritDamage = effectiveDamage + finalEffects.spa297 + finalEffects.spa303;
-    beforeCritDamage += Spell.truncAsDec32((finalEffects.spa296 + finalEffects.spa302) * effectiveDamage / 100);
 
-    if (ticks === 1)
+    // damage that will crit for both Nuke and DoT
+    let beforeCritDamage = effectiveDamage + Spell.truncAsDec32(finalEffects.spa302 * effectiveDamage / 100);
+
+    let beforeCritNotFocusedBy461Damage = Spell.truncAsDec32(finalEffects.spa296 * effectiveDamage / 100) +
+      Spell.truncAsDec32(finalEffects.spa297) + Spell.truncAsDec32(finalEffects.spa303 / ticks);
+
+    // damage that does not crit for either Nuke or DoT
+    let afterCritDamage = Spell.truncAsDec32(finalEffects.spa286 / ticks);
+
+    if (isNuke)
     {
-      critMultiplier = finalEffects.nukeCritMultiplier;
+      // spell damage will only crit for a Nuke
       beforeCritDamage += Spell.truncAsDec32(this.calculateSpellDamage(state));
-      total = beforeCritDamage + Spell.truncAsDec32(effectiveDamage * finalEffects.spa124 / 100);
+
+      // SPA 124 does not crit for a Nuke
+      afterCritDamage += Spell.truncAsDec32(effectiveDamage * finalEffects.spa124 / 100);
     }
     else
     {
-      critMultiplier = finalEffects.doTCritMultiplier;
-      beforeCritDamage += Spell.roundAsDec32(beforeCritDamage * finalEffects.spa124 / 100);
-      total = beforeCritDamage;
+      // SPA 124 does crit for a DoT
+      beforeCritDamage += Spell.truncAsDec32(beforeCritDamage * finalEffects.spa124 / 100);
     }
-    
-    total += Spell.truncAsDec32(finalEffects.spa286 / ticks);
+   
+    // compute crit damage in two pieces to support SPA 461
+    let critMultiplier = isNuke ? finalEffects.nukeCritMultiplier : finalEffects.doTCritMultiplier + 15;
+    let critOnlyFocusedBy461Damage = crit ? Spell.roundAsDec32(beforeCritDamage * critMultiplier / 100) : 0;
+    let critDamage = crit ? Spell.roundAsDec32((beforeCritDamage + beforeCritNotFocusedBy461Damage) * critMultiplier / 100) : 0;
 
-    if (crit)
+    // get total so far
+    let total = beforeCritDamage +  beforeCritNotFocusedBy461Damage + critDamage + afterCritDamage;
+
+    // SPA 461 is based on total damage for Nukes
+    if (isNuke)
     {
-      total += Spell.roundAsDec32(beforeCritDamage * critMultiplier / 100);
+      total += Spell.truncAsDec32(total * finalEffects.spa461 / 100);
+    }
+    // SPA 461 does not count standard after crit damage when dealing with DoTs
+    else
+    {
+      let eqIsDumb = 0.9999795; // I'm probably truncating too much or something
+      total += Spell.truncAsDec32(beforeCritDamage * eqIsDumb * finalEffects.spa461 / 100) + 
+        Spell.truncAsDec32(critOnlyFocusedBy461Damage * eqIsDumb * finalEffects.spa461 / 100);
     }
 
-    let doTMod = (0.995567 * this.duration) || 1;
-    total += Spell.truncAsDec32(total * finalEffects.spa461 * doTMod / 100);
+    // SPA 462, 483 and 507 are added to the very very end
     total += Spell.truncAsDec32(finalEffects.spa462 / ticks);
+    total += Spell.truncAsDec32(finalEffects.spa483 * effectiveDamage / 100);
+    total += Spell.truncAsDec32(finalEffects.spa507 * effectiveDamage / 1000); // 1000 is correct
+
     return total;
   }
 
@@ -675,7 +702,7 @@ class Spell
       }
       else if(totalCastTime > 7000)
       {
-        multiplier = 1.0 * totalCastTime / 7000;
+        multiplier = totalCastTime / 7001;
       }
 
       spellDamage = state.spellDamage * multiplier;
@@ -690,7 +717,7 @@ class Spell
     {
       if (--spell.remainingHits === 0 && state.spellMap.has(spell.id))
       {
-        state.spellMap.delete(spell.id);
+        //state.spellMap.delete(spell.id);
       }
     });
     
@@ -718,48 +745,66 @@ class Spell
   }
 }
 
+let SPELLS = new SpellDatabase(Classes.ENC);
+let state = new PlayerState(110, Classes.ENC, 1431);
+state.addAA(SPELLS.getAA(398, 38));      // Destructive Fury
+state.addAA(SPELLS.getAA(3718, 11));      // Critical Afflication
+state.addAA(SPELLS.getAA(215, 30));      // Fury of Magic
+state.addAA(SPELLS.getAA(3815, 39));     // Destructive Cascade
+state.addAA(SPELLS.getAA(1315, 11));
+state.addAA(SPELLS.getAA(1052, 11));
+state.addAA(SPELLS.getAA(1015, 2));
+state.addWorn(SPELLS.getWorn(50833));
+state.addWorn(SPELLS.getWorn(45764));
+state.addSpell(SPELLS.getSpell(57169));
+state.addSpell(SPELLS.getSpell(50974));
 
+let mind = SPELLS.getSpell(57284);
+for (let i = 0; i < 100; i++)
+  console.debug(mind.cast(state));
+
+
+/*
 let SPELLS = new SpellDatabase(Classes.DRU);
-let state = new PlayerState(105, Classes.DRU, 3000);
+let state = new PlayerState(110, Classes.DRU, 1065);
 
 state.addAA(SPELLS.getAA(3815, 39));     // Destructive Cascade
 state.addAA(SPELLS.getAA(398, 38));      // Destructive Fury
 state.addAA(SPELLS.getAA(526, 27));      // Critical Afflication
 state.addAA(SPELLS.getAA(215, 30));      // Fury of Magic
-state.addAA(SPELLS.getAA(1405, 5));      // Twincast AA
 state.addWorn(SPELLS.getWorn(57663));    // NBW Type 3 Aug
-state.addSpell(SPELLS.getSpell(41860));  // Destructive Vortex
-state.addSpell(SPELLS.getSpell(51006));  // Enc Synergy
 state.addAA(SPELLS.getAA(2148, 6));      // NBW Focus AA
 state.addAA(SPELLS.getAA(178, 25));      // Wrath of the Forest Walker
 state.addAA(SPELLS.getAA(958, 2));       // Enhanced Maladies
-state.addSpell(SPELLS.getSpell(51090));  // Improved Twincast
-state.addWorn(SPELLS.getWorn(49694));    // Eyes of Life and Decay
-state.addSpell(SPELLS.getSpell(46645));  // Fire Damage 85-123
-state.addSpell(SPELLS.getSpell(51134));  // Auspice
-state.addSpell(SPELLS.getSpell(51199));  // Season's Wrath 
-state.addSpell(SPELLS.getSpell(56137));  // Aria of Begalru
 state.addSpell(SPELLS.getSpell(51599));  // IOG
-state.addSpell(SPELLS.getSpell(51005));  // Mage Synergy
 state.addSpell(SPELLS.getSpell(56185));  // Akett's Psalm
-state.addSpell(SPELLS.getSpell(21661));  // Glyph
-state.addSpell(SPELLS.getSpell(51598));  // Chromatic Haze
+state.addSpell(SPELLS.getSpell(51342));   // Fierce Eye
+state.addSpell(SPELLS.getSpell(41860));  // Destructive Vortex
+state.addSpell(SPELLS.getSpell(56137));  // Aria of Begalru
+
+//state.addSpell(SPELLS.getSpell(51006));  // Enc Synergy
+//state.addSpell(SPELLS.getSpell(51184));  // Great Wolf
+//state.addSpell(SPELLS.getSpell(51598));  // Chromatic Haze
+//state.addSpell(SPELLS.getSpell(55882));  // Overwhelming Sunray II
+//state.addAA(SPELLS.getAA(1405, 5));      // Twincast AA
+//state.addSpell(SPELLS.getSpell(51090));  // Improved Twincast
+//state.addWorn(SPELLS.getWorn(49694));    // Eyes of Life and Decay
+//state.addSpell(SPELLS.getSpell(46645));  // Fire Damage 85-123
+//state.addSpell(SPELLS.getSpell(51134));  // Auspice
+//state.addSpell(SPELLS.getSpell(51199));  // Season's Wrath 
+//state.addSpell(SPELLS.getSpell(51005));  // Mage Synergy
+//state.addSpell(SPELLS.getSpell(21661));  // Glyph
+
 
 let nbw = SPELLS.getSpell(56030);
-console.debug('Cast #1');
-console.debug(nbw.cast(state));
-//console.debug('Cast #2');
-//console.debug(nbw.cast(state));
 
-/*
-for (let i = 0; i < 3; i++)
+for (let i = 0; i < 1; i++)
 {
   let result = nbw.cast(state);
   console.debug(result);  
 }
+
 */
-
-
 
 /*
 let SPELLS = new SpellDatabase(Classes.DRU);
