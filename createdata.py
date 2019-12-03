@@ -8,7 +8,7 @@ IGNORE_LIST = [ 'Illusion: ', 'MRC - ', 'Reserved', 'RESERVED', 'SKU', 'N/A', 'N
 
 CLASSES = [ 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65535 ]
 
-FOCUS_LIST = [ 170, 212, 273, 294, 375, 124, 127, 286, 296, 297, 302, 303, 374, 399, 413, 461, 462, 470, 483, 484, 507 ]
+FOCUS_SPAS = [ 170, 212, 273, 294, 375, 124, 127, 286, 296, 297, 302, 303, 374, 399, 413, 461, 462, 470, 483, 484, 507 ]
 
 
 dbStrings = dict()
@@ -86,14 +86,18 @@ if os.path.isfile(DBSpellsFile):
     doesDamage = False
     slotList = []
     for slot in data[len(data) - 1].strip().split('$'):
-      slots = []
-      for item in slot.split('|'):
-        if item != '':
-          slots.append(int(item))
-      if len(slots) > 1:
-        if (slots[1] == 0 or slots[1] == 79) and slots[2] < 0:
+      slots = {}
+      split = slot.split('|')
+      if len(split) == 6:
+        slots["num"] = int(split[0])
+        slots["spa"] = int(split[1])
+        slots["base1"] = int(split[2])
+        slots["base2"] = int(split[3])
+        slots["calc"] = int(split[4])
+        slots["max"] = int(split[5])
+        if (slots["spa"] == 0 or slots["spa"] == 79) and slots["base1"] < 0:
           doesDamage = True
-        if slots[1] in FOCUS_LIST:
+        if slots["spa"] in FOCUS_SPAS:
           spellFocus = True
       slotList.append(slots)
     entry['slotList'] = slotList

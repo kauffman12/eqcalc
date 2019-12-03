@@ -1,44 +1,25 @@
-const NUM = 0;
-const SPA = 1;
-const BASE1 = 2;
-const BASE2 = 3;
-const CALC = 4;
-const MAX = 5;
-
-const Classes =
-{
-  WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512,  SHM: 1024, NEC: 2048,
-  WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536
-}
-
 const MaxHitsTypes =
 {
   OUTGOING: 4, MATCHING: 7
 }
 
-class EffectsState
+const NON_CRIT_FOCUS_SPAS = [ 124, 127, 286, 296, 297, 302, 303, 399, 413, 461, 462, 483, 484, 507 ];
+
+class Effects
 {
   constructor()
   {
-    this.doTCritChance = 0.0;
-    this.doTCritMultiplier = 0.0;
-    this.nukeCritChance = 0.0;
-    this.nukeCritMultiplier = 0.0;
-    this.spa124 = 0;
-    this.spa127 = 0;
-    this.spa286 = 0;
-    this.spa296 = 0;
-    this.spa297 = 0;
-    this.spa302 = 0;
-    this.spa303 = 0;
-    this.spa399 = 0;
-    this.spa413 = 0;
-    this.spa461 = 0;
-    this.spa462 = 0;
-    this.spa483 = 0;
-    this.spa484 = 0;
-    this.spa507 = 0;
+    // initialize
+    let me = this;
+    [ 'doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier' ].forEach(prop => me[prop] = 0.0);
+    NON_CRIT_FOCUS_SPAS.forEach(spa => me['spa' + spa] = 0);
   }
+}
+
+const Classes =
+{
+  WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512,  SHM: 1024, NEC: 2048,
+  WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536
 }
 
 class LimitChecks
@@ -52,7 +33,7 @@ class LimitChecks
   {
     let list = Object.getOwnPropertyNames(this);
 
-    for (let i=0; i<list.length; i++)
+    for (let i = 0; i < list.length; i++)
     {
       if (this[list[i]] === false)
       {
@@ -183,42 +164,34 @@ class PlayerState
     this.spellMap = new Map();
     this.valueProcessMap = new Map();
     this.chargedSpells = new Map();
+    this.currentTime = 0;
   }
 
-  addAA(aa)
+  addEffect(id, effect, map)
   {
-    if (aa)
+    if (effect)
     {
-      this.passiveAAMap.set(aa.id, aa);
+      map.set(id, effect);
     }
     else
     {
-      console.debug('attempting to add unknown aa');
-    }    
-  }
-
-  addWorn(worn)
-  {
-    if (worn)
-    {
-      this.wornMap.set(worn.id, worn);
-    }
-    else
-    {
-      console.debug('attempting to add unknown worn');
+      console.debug('attempting to add unknown effect ' + id);
     }
   }
 
-  addSpell(spell)
+  addAA(id, rank)
   {
-    if (spell)
-    {
-      this.spellMap.set(spell.id, spell);
-    }
-    else
-    {
-      console.debug('attempting to add unknown spell');
-    }
+    this.addEffect(id, SPELLDB.getAA(id, rank), this.passiveAAMap);
+  }
+
+  addWorn(id)
+  {
+    this.addEffect(id, SPELLDB.getWorn(id), this.wornMap);
+  }
+
+  addSpell(id)
+  {
+    this.addEffect(id, SPELLDB.getSpell(id), this.spellMap);
   }
 
   calculateBaseNukeCritChance()
@@ -258,7 +231,7 @@ class PlayerState
     let totalEffects = new Map();
     allEffects.forEach((slots, spa) => totalEffects.set(spa, Array.from(slots.values()).reduce((a, b) => a + b, 0)));
 
-    let finalEffects = new EffectsState();
+    let finalEffects = new Effects();
     finalEffects.doTCritChance = this.baseDoTCritChance;
     finalEffects.doTCritMultiplier = this.baseDoTCritMultiplier;
     finalEffects.nukeCritChance = this.calculateBaseNukeCritChance();
@@ -268,10 +241,6 @@ class PlayerState
     {
       switch(spa)
       {
-        case 124: case 127: case 286: case 296: case 297: case 302: case 303: case 399: 
-        case 413: case 461: case 462: case 483: case 484: case 507:
-          finalEffects['spa' + spa] = value;
-          break;
         case 170:
           finalEffects.nukeCritMultiplier += value;
           break;
@@ -284,6 +253,11 @@ class PlayerState
         case 375:
           finalEffects.doTCritMultiplier += value;
           break;
+        default:
+          if (NON_CRIT_FOCUS_SPAS.includes(spa))
+          {
+            finalEffects['spa' + spa] = value;
+          }
       }
     });
 
@@ -325,7 +299,7 @@ class PlayerState
 
       effect.slotList.forEach(slot =>
       {
-        switch(slot[SPA])
+        switch(slot.spa)
         {
           // 10 means the slot is empty, 148 is stacking related?
           case 10: case 148:
@@ -333,20 +307,20 @@ class PlayerState
          
           // unhandled limit checks
           case 403: case 404: case 412: case 415: case 422: case 423: case 460: case 486: case 492: case 493: case 497: case 511:
-            console.debug('unhandled limit check ' + slot[SPA]);
+            console.debug('unhandled limit check ' + slot.spa);
             checks.unknown = true; // let it pass for now
             break;
 
           // Crit Damage Modifiers don't follow limit checks and do not require spell to be focusable
           case 170: case 273:
-            this.updateCategory(category, slot[SPA], slot[NUM], slot[BASE1]);
+            this.updateCategory(category, slot.spa, slot.num, slot.base1);
             break;
 
           // Crit Rate Modifiers that don't follow limit checks
           case 294: case 375:
             if (spell.focusable)
             {
-              this.updateCategory(category, slot[SPA], slot[NUM], slot[BASE1]);
+              this.updateCategory(category, slot.spa, slot.num, slot.base1);
             }
             break;
 
@@ -359,7 +333,7 @@ class PlayerState
             // may as well roll a value here
             if (spell.focusable)
             {
-              this.addValue(category, slot, slot[BASE1]);  
+              this.addValue(category, slot, slot.base1);  
             }
             break;
 
@@ -369,11 +343,11 @@ class PlayerState
             checks = this.processUpdates(category, checks, effect) ? new LimitChecks() : checks;
  
             // don't attempt anything that would use a charge if we're in a twincast or dot tick
-            if (spell.focusable && (slot[SPA] !== 399 || initialCast))
+            if (spell.focusable && (slot.spa !== 399 || initialCast))
             {
               // if base2 is specified than assume a range of values are possible between base1 and base2
               // may as well roll a value here
-              let value = (slot[BASE2] === 0) ? slot[BASE1] : Spell.randomInRange(slot[BASE2], slot[BASE1]);
+              let value = (slot.base2 === 0) ? slot.base1 : Spell.randomInRange(slot.base2, slot.base1);
               this.addValue(category, slot, value);
             }
             break;
@@ -381,132 +355,132 @@ class PlayerState
           // Limit Checks
           case 134:
             // max level but also handles decay if base2 is set
-            let difference = spell.level - slot[BASE1];
-            checks.maxLevel = difference <= 0 ? true : this.reduceValues(difference * slot[BASE2]);
+            let difference = spell.level - slot.base1;
+            checks.maxLevel = difference <= 0 ? true : this.reduceValues(difference * slot.base2);
             break;
           case 135:
             // pass if any resist check matches
-            checks.resist = checks.resist || slot[BASE1] === spell.resist;
+            checks.resist = checks.resist || slot.base1 === spell.resist;
             break;
           case 136:
-            if (slot[BASE1] < 0)
+            if (slot.base1 < 0)
             {
               // needs to fail if any of the exclude checks match
-              checks.target = checks.target === false ? checks.target : spell.target !== Math.abs(slot[BASE1]);
+              checks.target = checks.target === false ? checks.target : spell.target !== Math.abs(slot.base1);
             }
-            else if (slot[BASE1])
+            else if (slot.base1)
             {
               // needs to pass if any of the include checks match
-              checks.target = checks.target || spell.target === Math.abs(slot[BASE1]);
+              checks.target = checks.target || spell.target === Math.abs(slot.base1);
             }
             break;
           case 137:
-            if (slot[BASE1] < 0)
+            if (slot.base1 < 0)
             {
               // this SPA may appear multiple times
               // exclude spells with specified SPA            
-              checks.currentHp = checks.currentHp === false ? checks.currentHp : spell.findSpaValue(Math.abs(slot[BASE1])) === undefined;
+              checks.currentHp = checks.currentHp === false ? checks.currentHp : spell.findSpaValue(Math.abs(slot.base1)) === undefined;
             }
             else
             {
               // only include spells with specified SPA
-              checks.currentHp = checks.currentHp || spell.findSpaValue(Math.abs(slot[BASE1])) !== undefined;
+              checks.currentHp = checks.currentHp || spell.findSpaValue(Math.abs(slot.base1)) !== undefined;
             }
             break;
           case 138:
             // checks for both cases where beneficial spells are required ot detrimental spells are required
-            checks.detrimental = (spell.beneficial && slot[BASE1] === 1) || (!spell.beneficial && slot[BASE1] !== 1)
+            checks.detrimental = (spell.beneficial && slot.base1 === 1) || (!spell.beneficial && slot.base1 !== 1)
             break;
           case 139:
-            if (slot[BASE1] < 0)
+            if (slot.base1 < 0)
             {
               // needs to fail if any of the exclude checks match
-              checks.spell = checks.spell === false ? checks.spell : spell.id !== Math.abs(slot[BASE1]);
+              checks.spell = checks.spell === false ? checks.spell : spell.id !== Math.abs(slot.base1);
             }
             else
             {
               // only include spells with specified id
-              checks.spell = checks.spell || spell.id === Math.abs(slot[BASE1]);
+              checks.spell = checks.spell || spell.id === Math.abs(slot.base1);
             }
             break;
           case 140:
-            checks.minDuration = spell.duration >= slot[BASE1];
+            checks.minDuration = spell.duration >= slot.base1;
             break;
           case 141:
             // this SPA always seems to enforce 0 duration spells
-            checks.duration = (slot[BASE1] === 1 && spell.duration === 0);
+            checks.duration = (slot.base1 === 1 && spell.duration === 0);
             break;
           case 142:
-            checks.minLevel = spell.level >= slot[BASE1];
+            checks.minLevel = spell.level >= slot.base1;
             break;
           case 143:
-            checks.minCastTime = spell.castTime >= slot[BASE1];
+            checks.minCastTime = spell.castTime >= slot.base1;
             break;
           case 144:
-            checks.maxCastTime = spell.castTime <= slot[BASE1];
+            checks.maxCastTime = spell.castTime <= slot.base1;
             break;
           case 311:
             // exclude combat skills
             checks.combatSkills = spell.findSpaValue(193) === undefined;
             break;
           case 348:
-            checks.minMana = spell.manaCost >= slot[BASE1];
+            checks.minMana = spell.manaCost >= slot.base1;
             break;
           case 385:
-            if (slot[BASE1] < 0)
+            if (slot.base1 < 0)
             {
               // needs to fail if any of the exclude checks match
-              checks.spellGroup = checks.spellGroup === false ? checks.spellGroup : !SPELLS.isSpellInGroup(spell.id, Math.abs(slot[BASE1]));
+              checks.spellGroup = checks.spellGroup === false ? checks.spellGroup : !SPELLDB.isSpellInGroup(spell.id, Math.abs(slot.base1));
             }
             else
             {
               // only include spell if it is in the spell group
-              checks.spellGroup = checks.spellGroup || SPELLS.isSpellInGroup(spell.id, slot[BASE1]);
+              checks.spellGroup = checks.spellGroup || SPELLDB.isSpellInGroup(spell.id, slot.base1);
             }
             break;
           case 391:
-            checks.maxMana = spell.manaCost <= slot[BASE1];
+            checks.maxMana = spell.manaCost <= slot.base1;
             break;
           case 411: case 485:
-              if (slot[BASE1] < 0)
+              if (slot.base1 < 0)
               {
                 // needs to fail if any of the exclude checks match
-                checks.playerClass = checks.playerClass === false ? checks.playerClass : ((Math.abs(slot[BASE1]) & this.playerClass) !== this.playerClass);
+                checks.playerClass = checks.playerClass === false ? checks.playerClass : ((Math.abs(slot.base1) & this.playerClass) !== this.playerClass);
               }
               else
               {
                 // only include players that match the correct class
-                checks.playerClass = checks.playerClass || ((slot[BASE1] & this.playerClass) === this.playerClass);
+                checks.playerClass = checks.playerClass || ((slot.base1 & this.playerClass) === this.playerClass);
               }            
             break;
           case 414:
-              if (slot[BASE1] < 0)
+              if (slot.base1 < 0)
               {
                 // needs to fail if any of the exclude checks match
-                checks.spellSkill = checks.spellsKill === false ? checks.spellSkill : spell.skill !== Math.abs(slot[BASE1]);
+                checks.spellSkill = checks.spellsKill === false ? checks.spellSkill : spell.skill !== Math.abs(slot.base1);
               }
               else
               {
                 // only include spells with specified spell skill
-                checks.spellSkill = checks.spellSkill || spell.skill === Math.abs(slot[BASE1]);
+                checks.spellSkill = checks.spellSkill || spell.skill === Math.abs(slot.base1);
               }
             break;
           case 479:
             // only one check needs to pass
-            checks.maxValue = (checks.maxValue || spell.hasSpaWithMaxValue(slot[BASE2], slot[BASE1]));
+            checks.maxValue = (checks.maxValue || spell.hasSpaWithMaxValue(slot.base2, slot.base1));
             break;
           case 480:
             // only one check needs to pass
-            checks.minValue = (checks.minValue || spell.hasSpaWithMinValue(slot[BASE2], slot[BASE1]));
+            checks.minValue = (checks.minValue || spell.hasSpaWithMinValue(slot.base2, slot.base1));
             break;
           case 490:
-            checks.minRecastTime = spell.recastTime >= slot[BASE1];
+            checks.minRecastTime = spell.recastTime >= slot.base1;
             break;     
           case 491:
-            checks.maxRecastTime = spell.recastTime <= slot[BASE1];
+            checks.maxRecastTime = spell.recastTime <= slot.base1;
             break;     
           case 495:
-            checks.maxDuration = spell.duration <= slot[BASE1];
+            checks.maxDuration = spell.duration <= slot.base1;
             break;
           default:
             checks = this.processUpdates(category, checks, effect) ? new LimitChecks() : checks;
@@ -520,17 +494,17 @@ class PlayerState
 
   addValue(category, slot, value)
   {
-    let key = slot[NUM] + '-' + slot[SPA];
+    let key = slot.num + '-' + slot.spa;
     let updatedValue = this.valueProcessMap.get(key) || {};
 
     if (updatedValue.max === undefined || updatedValue.max < value)
     {
-      let handledSlots = category.get(slot[SPA]);
-      let max = handledSlots ? Math.max(value, handledSlots.get(slot[NUM]) || 0) : value;
-      if (!handledSlots || !handledSlots.has(slot[NUM]) || max > handledSlots.get(slot[NUM]))
+      let handledSlots = category.get(slot.spa);
+      let max = handledSlots ? Math.max(value, handledSlots.get(slot.num) || 0) : value;
+      if (!handledSlots || !handledSlots.has(slot.num) || max > handledSlots.get(slot.num))
       {
-        updatedValue.spa = slot[SPA];
-        updatedValue.num = slot[NUM];
+        updatedValue.spa = slot.spa;
+        updatedValue.num = slot.num;
         updatedValue.max = max;
         this.valueProcessMap.set(key, updatedValue);
       }  
@@ -636,30 +610,30 @@ class Spell
 
     this.slotList.forEach(slot =>
     {
-      switch(slot[SPA])
+      switch(slot.spa)
       {
         case 374:
-          let proc374 = SPELLS.getSpell(slot[BASE2]);
+          let proc374 = SPELLDB.getSpell(slot.base2);
 
-          if (Math.random() * 100 <= slot[BASE1])
+          if (Math.random() * 100 <= slot.base1)
           {
             allResults = allResults.concat(proc374.cast(state));
           }
           break;
 
         case 470:
-          let proc470 = SPELLS.getBestSpellInGroup(slot[BASE2]);
+          let proc470 = SPELLDB.getBestSpellInGroup(slot.base2);
           if (proc470)
           {
             allResults = allResults.concat(proc470.cast(state));
-            console.debug('can not find spell to proc: ' + slot[BASE2]);
+            console.debug('can not find spell to proc: ' + slot.base2);
           }
           break;
 
         case 0: case 79:
           let results = [];                 
           let ticks = this.duration === 0 ? 1 : this.duration + 1;
-          let isNuke = (this.duration === 0 || slot[SPA] === 79);
+          let isNuke = (this.duration === 0 || slot.spa === 79);
           let count = isNuke ? 1 : ticks;
 
           // ticks is a custom field that I set to 1 for nukes
@@ -675,10 +649,10 @@ class Spell
             }
       
             // base damage can increase with time and needs to be calculated per tick
-            let baseDamage = Math.abs(this.calculateValue(slot[CALC], slot[BASE1], slot[MAX], i + 1, state.level));
+            let baseDamage = Math.abs(this.calculateValue(slot.calc, slot.base1, slot.max, i + 1, state.level));
 
             // add damage for one hit / tick
-            results.push({ damage: this.calculateDamage(state, baseDamage, crit, isNuke, ticks, finalEffects), crit: crit, spa: slot[SPA] });
+            results.push({ damage: this.calculateDamage(state, baseDamage, crit, isNuke, ticks, finalEffects), crit: crit, spa: slot.spa });
       
             if (doTwincast)
             {
@@ -686,7 +660,7 @@ class Spell
               {
                 crit = (Math.random() * 100 <= finalEffects.nukeCritChance);
                 finalEffects = state.buildEffects(this, false);
-                results.push({ damage: this.calculateDamage(state, baseDamage, crit, isNuke, ticks, finalEffects), crit: crit, spa: slot[SPA] });
+                results.push({ damage: this.calculateDamage(state, baseDamage, crit, isNuke, ticks, finalEffects), crit: crit, spa: slot.spa });
               }
               else
               {
@@ -702,6 +676,11 @@ class Spell
           break;
       }
     });
+
+    if (this.duration > 0)
+    {
+      state.addSpell(this.id);
+    }
 
     return allResults;
   }
@@ -1032,14 +1011,14 @@ class Spell
     {
       let slot = this.slotList[i];
       
-      if (slot[SPA] === spa)
+      if (slot.spa === spa)
       {
-        result = slot[BASE1];
+        result = slot.base1;
         break;
       }
-      else if (slot[SPA] === 470)
+      else if (slot.spa === 470)
       {
-        let best = SPELLS.getBestSpellInGroup(slot[BASE2]);
+        let best = SPELLDB.getBestSpellInGroup(slot.base2);
         result = best ? best.findSpaValue(spa) : undefined;
         break;
       }
@@ -1059,127 +1038,44 @@ class Spell
   }
 }
 
-/*
-let SPELLS = new SpellDatabase(Classes.ENC);
-let state = new PlayerState(115, Classes.ENC, 1000);
-state.addAA(SPELLS.getAA(398, 34));        // Destructive Fury
-state.addAA(SPELLS.getAA(3718, 11));       // Critical Afflication
-state.addAA(SPELLS.getAA(215, 30));        // Fury of Magic
-state.addAA(SPELLS.getAA(3815, 33));       // Destructive Cascade
-//state.addWorn(SPELLS.getWorn(57741));      // Strangulate type 3
-//state.addWorn(SPELLS.getWorn(50833));      // Threads
-//state.addSpell(SPELLS.getSpell(56137));    // Begalru rk3
-//state.addSpell(SPELLS.getSpell(57190));    // Bolstering
-//state.addSpell(SPELLS.getSpell(57169));    // Tash
-//state.addAA(SPELLS.getAA(1015, 2));        // Enhanced Torment
-//state.addAA(SPELLS.getAA(1051, 3));        // Bewilder
-//state.addAA(SPELLS.getAA(1313, 3));       // Strangulate Focus
-//state.addAA(SPELLS.getAA(1315, 5));        // Mind Tempest
-//state.addWorn(SPELLS.getWorn(45944));       // Worn Magic
-//state.addSpell(SPELLS.getSpell(51342));     // Fierce Eye
-//state.addSpell(SPELLS.getSpell(56185));     // Psalm
-//state.addSpell(SPELLS.getSpell(50974));     // Lingering Cry
-state.addSpell(SPELLS.getSpell(41764));
-//tate.addSpell(SPELLS.getSpell(51599));  // IOG
-state.addSpell(SPELLS.getSpell(47048));  // IOG
 
-//state.addAA(SPELLS.getAA(1052, 9));
-//state.addWorn(SPELLS.getWorn(45764));
-//state.addWorn(SPELLS.getWorn(50582));
-//state.addSpell(SPELLS.getSpell(51184));
-//state.addWorn(SPELLS.getWorn(50576));
-
-//let theSpell = SPELLS.getSpell(44980);
-let theSpell = SPELLS.getSpell(44973);
-//let theSpell = SPELLS.getSpell(57284);
-for (let i = 0; i < 3; i++) console.debug(theSpell.cast(state));
-
-*/
-
-/*
-let SPELLS = new SpellDatabase(Classes.DRU);
-let state = new PlayerState(110, Classes.DRU, 1065);
-
-state.addAA(SPELLS.getAA(215, 30));      // Fury of Magic
-state.addAA(SPELLS.getAA(526, 27));      // Critical Afflication
-state.addAA(SPELLS.getAA(3815, 26));     // Destructive Cascade
-state.addAA(SPELLS.getAA(398, 38));      // Destructive Fury
-state.addWorn(SPELLS.getWorn(57663));    // NBW Type 3 Aug
-state.addAA(SPELLS.getAA(2148, 6));      // NBW Focus AA
-state.addSpell(SPELLS.getSpell(51598));  // Chromatic Haze
-state.addWorn(SPELLS.getWorn(45946));    // Worn Fire Damage
-state.addSpell(SPELLS.getSpell(56185));  // Akett's Psalm
-state.addSpell(SPELLS.getSpell(56137));  // Aria of Begalru
-state.addSpell(SPELLS.getSpell(51342));  // Fierce Eye
-state.addAA(SPELLS.getAA(958, 2));       // Enhanced Maladies
-state.addSpell(SPELLS.getSpell(51199));  // Season's Wrath 
-state.addSpell(SPELLS.getSpell(51090));  // Improved Twincast
-
-//state.addSpell(SPELLS.getSpell(41860));  // Destructive Vortex
-//state.addAA(SPELLS.getAA(178, 7));       // Wrath of the Forest Walker
-//state.addSpell(SPELLS.getSpell(51919));  // Git of Chromatic Haze
-//state.addSpell(SPELLS.getSpell(58212)); // Dissident
-//state.addSpell(SPELLS.getSpell(55882));  // Overwhelming Sunray II
-//state.addSpell(SPELLS.getSpell(51006));  // Enc Synergy
-//state.addSpell(SPELLS.getSpell(51599));  // IOG
-
-//state.addSpell(SPELLS.getSpell(51184));  // Great Wolf
-//state.addAA(SPELLS.getAA(1405, 5));      // Twincast AA
-//state.addWorn(SPELLS.getWorn(49694));    // Eyes of Life and Decay
-//state.addSpell(SPELLS.getSpell(51134));  // Auspice
-//state.addSpell(SPELLS.getSpell(51005));  // Mage Synergy
-//state.addSpell(SPELLS.getSpell(21661));  // Glyph
-
-
-let nbw = SPELLS.getSpell(56030);
-
-
-for (let i = 0; i < 20; i++)
-{
-  let result = nbw.cast(state);
-  console.debug("Cast #" + (i+1));
-  console.debug(result);  
-}
-
-*/
-let SPELLS = new SpellDatabase(Classes.WIZ);
+let SPELLDB = new SpellDatabase(Classes.WIZ);
 let state = new PlayerState(115, Classes.WIZ, 3000);
-state.addAA(SPELLS.getAA(114, 35));      // Fury of Magic
-state.addAA(SPELLS.getAA(397, 36));      // Destructive Fury
-state.addAA(SPELLS.getAA(1263, 8));      // Destructive Adept
-state.addAA(SPELLS.getAA(850, 20));      // Sorc Vengeance
-//state.addSpell(SPELLS.getSpell(51502));  // Improved Familiar
-state.addSpell(SPELLS.getSpell(51508));  // Frenzied Devestation
-//state.addSpell(SPELLS.getSpell(51090));  // Improved Twincast
+state.addAA(114, 35);      // Fury of Magic
+state.addAA(397, 36);      // Destructive Fury
+state.addAA(1263, 8);      // Destructive Adept
+state.addAA(850, 20);      // Sorc Vengeance
+state.addSpell(51502);     // Improved Familiar
+state.addSpell(51508);     // Frenzied Devestation
+state.addSpell(51090);     // Improved Twincast
 
+//state.addSpell(SPELLDB.getSpell(18882));  // Twincast
+//state.addAA(SPELLDB.getAA(1292, 9));
+//state.addSpell(SPELLDB.getSpell(31526));
+//state.addSpell(SPELLDB.getSpell(58165));
+//state.addSpell(SPELLDB.getSpell(51342));
+//state.addSpell(SPELLDB.getSpell(56137));
+//state.addSpell(SPELLDB.getSpell(51500));
+//state.addSpell(SPELLDB.getSpell(51006));
+//state.addSpell(SPELLDB.getSpell(51526));
 
-//state.addSpell(SPELLS.getSpell(18882));  // Twincast
-//state.addAA(SPELLS.getAA(1292, 9));
-//state.addSpell(SPELLS.getSpell(31526));
-//state.addSpell(SPELLS.getSpell(58165));
-//state.addSpell(SPELLS.getSpell(51342));
-//state.addSpell(SPELLS.getSpell(56137));
-//state.addSpell(SPELLS.getSpell(51500));
-//state.addSpell(SPELLS.getSpell(51006));
-//state.addSpell(SPELLS.getSpell(51526));
+//state.addWorn(SPELLDB.getWorn(49694));    // Eyes of Life and Decay
+//state.addWorn(SPELLDB.getWorn(45815));    // WIZ Ethereal Focus 9
+//state.addSpell(SPELLDB.getSpell(48965));  // Wizard Spire
+//state.addSpell(SPELLDB.getSpell(51185));  // Great Wolf
+//state.addSpell(SPELLDB.getSpell(51134));  // Auspice
+//state.addSpell(SPELLDB.getSpell(36942));  // Arcane Destruction
+//state.addSpell(SPELLDB.getSpell(41195));  // Arcane Fury
+//state.addSpell(SPELLDB.getSpell(51538));  // Fury of the Gods
+//state.addSpell(SPELLDB.getSpell(51199));  // Season's Wrath
+//state.addSpell(SPELLDB.getSpell(55105));  // Sanctity 
+//state.addSpell(SPELLDB.getSpell(51006));  // Enc Synergy
 
-
-//state.addWorn(SPELLS.getWorn(49694));    // Eyes of Life and Decay
-//state.addWorn(SPELLS.getWorn(45815));    // WIZ Ethereal Focus 9
-//state.addSpell(SPELLS.getSpell(48965));  // Wizard Spire
-//state.addSpell(SPELLS.getSpell(51185));  // Great Wolf
-//state.addSpell(SPELLS.getSpell(51134));  // Auspice
-//state.addSpell(SPELLS.getSpell(36942));  // Arcane Destruction
-//state.addSpell(SPELLS.getSpell(41195));  // Arcane Fury
-//state.addSpell(SPELLS.getSpell(51538));  // Fury of the Gods
-//state.addSpell(SPELLS.getSpell(51199));  // Season's Wrath
-//state.addSpell(SPELLS.getSpell(55105));  // Sanctity 
-//state.addSpell(SPELLS.getSpell(51006));  // Enc Synergy
-
-let dissident = SPELLS.getSpell(58149);
-let skyfire = SPELLS.getSpell(56872);
-for (let i = 0; i < 70; i++ )
+let dissident = SPELLDB.getSpell(58149);
+let skyfire = SPELLDB.getSpell(56872);
+let stormjolt = SPELLDB.getSpell(58164);
+for (let i = 0; i < 2; i++ )
 {
   console.debug("Cast #" + (i+1));
-  console.debug(skyfire.cast(state));
+  console.debug(stormjolt.cast(state));
 } 
