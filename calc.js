@@ -72,6 +72,7 @@ class SpellDatabase
     this.spells = new Map();
     this.spellGroups = new Map();
     this.bestSpellInGroup = new Map();
+    this.cache = new Map();
 
     let aas = require('./data/AA' + playerClass + '.json');
     if (aas && aas.length > 0)
@@ -103,26 +104,60 @@ class SpellDatabase
 
   getAA(id, rank)
   {
-    let aa = this.aas.get(id + '-' + rank);
-    return aa ? new AA(aa) : undefined;
+    let result = undefined;
+    let key = id + '-' + rank;
+
+    if (this.cache.has(key))
+    {
+      result = this.cache.get(key);
+    }
+    else if (this.aas.get(key))
+    {
+      result = new AA(this.aas.get(key));
+      this.cache.set(key, result);
+    }
+
+    return result;
   }
 
   getSpell(id)
   {
-    let spell = this.spells[id];
-    return spell ? new Spell(spell) : undefined;
+    let result = undefined;
+
+    if (this.cache.has(id))
+    {
+      result = this.cache.get(id);
+    }
+    else if (this.spells[id])
+    {
+      result = new Spell(this.spells[id]);
+      this.cache.set(id, result);
+    }
+
+    return result;
   }
   
+  getWorn(id)
+  {
+    let result = undefined;
+
+    if (this.cache.has(id))
+    {
+      result = this.cache.get(id);
+    }
+    else if (this.spells[id])
+    {
+      result = new Worn(this.spells[id]);
+      this.cache.set(id, result);
+    }
+
+    return result;
+  }
+
   getBestSpellInGroup(id)
   {
     let best = this.bestSpellInGroup.get(id);
-    return best ? new Spell(this.spells[best]) : undefined;
-  }
-
-  getWorn(id)
-  {
-    let worn = this.spells[id];
-    return worn ? new Worn(worn) : undefined;
+    return best ? this.getSpell(best) : undefined;
   }
 
   isSpellInGroup(spellId, groupId)
@@ -147,6 +182,7 @@ class PlayerState
     this.wornMap = new Map();
     this.spellMap = new Map();
     this.valueProcessMap = new Map();
+    this.chargedSpells = new Map();
   }
 
   addAA(aa)
@@ -185,13 +221,34 @@ class PlayerState
     }
   }
 
-  buildEffects(spell, chargedSpells, initialCast = false)
+  calculateBaseNukeCritChance()
+  {
+    return this.baseNukeCritChance + (this.playerClass == Classes.WIZ ? Math.ceil(Math.random() * 3) : 0);
+  }
+
+  charge()
+  {
+    let alreadyCharged = new Map();
+    Array.from(this.chargedSpells.values()).forEach(spell => 
+    {
+      if (!alreadyCharged.has(spell.id) && --spell.remainingHits === 0 && this.spellMap.has(spell.id))
+      {
+        this.spellMap.delete(spell.id);
+      }
+
+      alreadyCharged.set(spell.id, true);
+    });
+    
+    this.chargedSpells.clear();
+  }
+
+  buildEffects(spell, initialCast = false)
   {
     let allEffects = new Map();
     this.updateEffectsInCategory(this.passiveAAMap, allEffects, spell);
 
     let spellCategory = new Map();
-    this.updateEffectsInCategory(this.spellMap, spellCategory, spell, chargedSpells, initialCast);
+    this.updateEffectsInCategory(this.spellMap, spellCategory, spell, initialCast);
     this.addEffectCategory(allEffects, spellCategory);
 
     let wornCategory = new Map();
@@ -237,6 +294,9 @@ class PlayerState
       finalEffects.doTCritMultiplier = 100;
     }
 
+    // charge spells
+    this.charge();
+
     return finalEffects;
   }
 
@@ -257,12 +317,7 @@ class PlayerState
     });
   }
 
-  calculateBaseNukeCritChance()
-  {
-    return this.baseNukeCritChance + (this.playerClass == Classes.WIZ ? Math.ceil(Math.random() * 3) : 0);
-  }
- 
-  updateEffectsInCategory(effectMap, category, spell, chargedSpells, initialCast = false)
+  updateEffectsInCategory(effectMap, category, spell, initialCast = false)
   {
     effectMap.forEach(effect =>
     {
@@ -298,7 +353,7 @@ class PlayerState
           // Crit Rate Modifiers that do follow the normal rules
           case 212:
             // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
-            checks = this.processUpdates(category, checks, effect, chargedSpells) ? new LimitChecks() : checks;
+            checks = this.processUpdates(category, checks, effect) ? new LimitChecks() : checks;
             
             // if base2 is specified than assume a range of values are possible between base1 and base2
             // may as well roll a value here
@@ -311,7 +366,7 @@ class PlayerState
           // Spell Focus - supports a range of values
           case 124: case 127: case 286: case 296: case 297: case 302: case 303: case 399: case 413: case 461: case 462: case 483: case 484: case 507:   
             // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
-            checks = this.processUpdates(category, checks, effect, chargedSpells) ? new LimitChecks() : checks;
+            checks = this.processUpdates(category, checks, effect) ? new LimitChecks() : checks;
  
             // don't attempt anything that would use a charge if we're in a twincast or dot tick
             if (spell.focusable && (slot[SPA] !== 399 || initialCast))
@@ -454,12 +509,12 @@ class PlayerState
             checks.maxDuration = spell.duration <= slot[BASE1];
             break;
           default:
-            checks = this.processUpdates(category, checks, effect, chargedSpells) ? new LimitChecks() : checks;
+            checks = this.processUpdates(category, checks, effect) ? new LimitChecks() : checks;
         }
       });
   
       // process remaining
-      this.processUpdates(category, checks, effect, chargedSpells, true);
+      this.processUpdates(category, checks, effect, true);
     });
   }
 
@@ -482,7 +537,7 @@ class PlayerState
     }
   }
 
-  processUpdates(category, checks, effect, chargedSpells, complete = false)
+  processUpdates(category, checks, effect, complete = false)
   {
     let processed = false;
 
@@ -496,9 +551,9 @@ class PlayerState
           this.updateCategory(category, updatedValue.spa, updatedValue.num, updatedValue.max);
 
           // only attempt to count charges if limits were required to pass
-          if (chargedSpells && effect.maxHits > 0 && effect.maxHitsType === MaxHitsTypes.MATCHING)
+          if (effect.maxHits > 0 && effect.maxHitsType === MaxHitsTypes.MATCHING)
           {
-            chargedSpells.set(updatedValue.spa + '-' + updatedValue.num, effect);
+            this.chargedSpells.set(updatedValue.spa + '-' + updatedValue.num, effect);
           }
         });
  
@@ -573,40 +628,40 @@ class Spell
   cast(state)
   {
     let allResults = [];
-    let chargedSpells = new Map();
 
     this.calculateDuration(state.level);
+
+    let finalEffects = state.buildEffects(this, true);
+    let doTwincast = finalEffects.spa399 !== undefined && Math.random() * 100 <= finalEffects.spa399;
 
     this.slotList.forEach(slot =>
     {
       switch(slot[SPA])
       {
-        case 470:
-          // build effects and apply charges like normal
-          state.buildEffects(this, chargedSpells, true);
-          this.charge(state, chargedSpells);
+        case 374:
+          let proc374 = SPELLS.getSpell(slot[BASE2]);
 
-          let additional = SPELLS.getBestSpellInGroup(slot[BASE2]);
-          allResults = allResults.concat(additional.cast(state));
+          if (Math.random() * 100 <= slot[BASE1])
+          {
+            allResults = allResults.concat(proc374.cast(state));
+          }
+          break;
+
+        case 470:
+          let proc470 = SPELLS.getBestSpellInGroup(slot[BASE2]);
+          if (proc470)
+          {
+            allResults = allResults.concat(proc470.cast(state));
+            console.debug('can not find spell to proc: ' + slot[BASE2]);
+          }
           break;
 
         case 0: case 79:
-          let results = [];
-          let finalEffects = state.buildEffects(this, chargedSpells, true);
-          let doTwincast = finalEffects.spa399 !== undefined && Math.random() * 100 <= finalEffects.spa399;
-      
-          // apply charges
-          this.charge(state, chargedSpells);
-        
-          // update cast time
-          if (finalEffects.spa127 !== undefined)
-          {
-            this.actualCastTime = this.castTime - (this.castTime * finalEffects.spa127 / 100);
-          }
-      
+          let results = [];                 
           let ticks = this.duration === 0 ? 1 : this.duration + 1;
           let isNuke = (this.duration === 0 || slot[SPA] === 79);
           let count = isNuke ? 1 : ticks;
+
           // ticks is a custom field that I set to 1 for nukes
           for (let i = 0; i < count; i++)
           {
@@ -615,11 +670,11 @@ class Spell
       
             if (i > 0)
             {
-              // rebuild and charge after each DoT tick
-              finalEffects = state.buildEffects(this, chargedSpells, false);
-              this.charge(state, chargedSpells);
+              // rebuild after each DoT tick
+              finalEffects = state.buildEffects(this, false);
             }
       
+            // base damage can increase with time and needs to be calculated per tick
             let baseDamage = Math.abs(this.calculateValue(slot[CALC], slot[BASE1], slot[MAX], i + 1, state.level));
 
             // add damage for one hit / tick
@@ -630,8 +685,7 @@ class Spell
               if (isNuke)
               {
                 crit = (Math.random() * 100 <= finalEffects.nukeCritChance);
-                finalEffects = state.buildEffects(this, chargedSpells, false);
-                this.charge(state, chargedSpells);
+                finalEffects = state.buildEffects(this, false);
                 results.push({ damage: this.calculateDamage(state, baseDamage, crit, isNuke, ticks, finalEffects), crit: crit, spa: slot[SPA] });
               }
               else
@@ -958,22 +1012,6 @@ class Spell
     return result;
   }  
 
-  charge(state, chargedSpells)
-  {
-    let alreadyCharged = new Map();
-    Array.from(chargedSpells.values()).forEach(spell => 
-    {
-      if (!alreadyCharged.has(spell.id) && --spell.remainingHits === 0 && state.spellMap.has(spell.id))
-      {
-        state.spellMap.delete(spell.id);
-      }
-
-      alreadyCharged.set(spell.id, true);
-    });
-    
-    chargedSpells.clear();
-  }
-
   hasSpaWithMaxValue(spa, value)
   {
     let found = this.findSpaValue(spa);
@@ -1075,6 +1113,7 @@ state.addSpell(SPELLS.getSpell(56137));  // Aria of Begalru
 state.addSpell(SPELLS.getSpell(51342));  // Fierce Eye
 state.addAA(SPELLS.getAA(958, 2));       // Enhanced Maladies
 state.addSpell(SPELLS.getSpell(51199));  // Season's Wrath 
+state.addSpell(SPELLS.getSpell(51090));  // Improved Twincast
 
 //state.addSpell(SPELLS.getSpell(41860));  // Destructive Vortex
 //state.addAA(SPELLS.getAA(178, 7));       // Wrath of the Forest Walker
@@ -1086,7 +1125,6 @@ state.addSpell(SPELLS.getSpell(51199));  // Season's Wrath
 
 //state.addSpell(SPELLS.getSpell(51184));  // Great Wolf
 //state.addAA(SPELLS.getAA(1405, 5));      // Twincast AA
-//state.addSpell(SPELLS.getSpell(51090));  // Improved Twincast
 //state.addWorn(SPELLS.getWorn(49694));    // Eyes of Life and Decay
 //state.addSpell(SPELLS.getSpell(51134));  // Auspice
 //state.addSpell(SPELLS.getSpell(51005));  // Mage Synergy
@@ -1096,22 +1134,26 @@ state.addSpell(SPELLS.getSpell(51199));  // Season's Wrath
 let nbw = SPELLS.getSpell(56030);
 
 
-for (let i = 0; i < 1; i++)
+for (let i = 0; i < 20; i++)
 {
   let result = nbw.cast(state);
+  console.debug("Cast #" + (i+1));
   console.debug(result);  
 }
-*/
 
+*/
 let SPELLS = new SpellDatabase(Classes.WIZ);
 let state = new PlayerState(115, Classes.WIZ, 3000);
 state.addAA(SPELLS.getAA(114, 35));      // Fury of Magic
 state.addAA(SPELLS.getAA(397, 36));      // Destructive Fury
 state.addAA(SPELLS.getAA(1263, 8));      // Destructive Adept
 state.addAA(SPELLS.getAA(850, 20));      // Sorc Vengeance
-state.addSpell(SPELLS.getSpell(51502));  // Improved Familiar
+//state.addSpell(SPELLS.getSpell(51502));  // Improved Familiar
 state.addSpell(SPELLS.getSpell(51508));  // Frenzied Devestation
+//state.addSpell(SPELLS.getSpell(51090));  // Improved Twincast
 
+
+//state.addSpell(SPELLS.getSpell(18882));  // Twincast
 //state.addAA(SPELLS.getAA(1292, 9));
 //state.addSpell(SPELLS.getSpell(31526));
 //state.addSpell(SPELLS.getSpell(58165));
@@ -1124,7 +1166,6 @@ state.addSpell(SPELLS.getSpell(51508));  // Frenzied Devestation
 
 //state.addWorn(SPELLS.getWorn(49694));    // Eyes of Life and Decay
 //state.addWorn(SPELLS.getWorn(45815));    // WIZ Ethereal Focus 9
-//state.addSpell(SPELLS.getSpell(18882));  // Twincast
 //state.addSpell(SPELLS.getSpell(48965));  // Wizard Spire
 //state.addSpell(SPELLS.getSpell(51185));  // Great Wolf
 //state.addSpell(SPELLS.getSpell(51134));  // Auspice
@@ -1136,8 +1177,9 @@ state.addSpell(SPELLS.getSpell(51508));  // Frenzied Devestation
 //state.addSpell(SPELLS.getSpell(51006));  // Enc Synergy
 
 let dissident = SPELLS.getSpell(58149);
+let skyfire = SPELLS.getSpell(56872);
 for (let i = 0; i < 70; i++ )
 {
   console.debug("Cast #" + (i+1));
-  console.debug(dissident.cast(state));
+  console.debug(skyfire.cast(state));
 } 
