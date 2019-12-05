@@ -65,6 +65,98 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, isNu
   return { total: total, crit: crit };
 }
 
+exports.calculateDuration = (playerLevel, spell) =>
+  {
+    let value = 0;
+    switch (spell.duration1)
+    {
+      case 0:
+        value = 0;
+        break;
+      case 1:
+        value = Math.trunc(playerLevel / 2) || 1;
+        break;
+      case 2:
+        value = Math.trunc(playerLevel / 2) + 5;
+        value = value < 6 ? 6 : value;
+          break;
+      case 3:
+        value = playerLevel * 30;
+        break;
+      case 4:
+        value = 50;
+        break;
+      case 5:
+        value = 2;
+        break;
+      case 6:
+        value = Math.trunc(playerLevel / 2);
+        break;
+      case 7:
+        value = playerLevel;
+        break;
+      case 8:
+        value = playerLevel + 10;
+        break;
+      case 9:
+        value = playerLevel * 2 + 10;
+        break;
+      case 10:
+        value = playerLevel * 30 + 10;
+        break;
+      case 11:
+        value = (playerLevel + 3) * 30;
+        break;
+      case 12:
+        value = Math.trunc(playerLevel / 2) || 1;
+        break;
+      case 13:
+        value = playerLevel * 4 + 10;
+        break;
+      case 14:
+        value = playerLevel * 5 + 10;
+        break;
+      case 15:
+        value = (playerLevel * 5 + 50) * 2;
+        break;
+      case 50:
+        value = 72000;
+        break;
+      case 3600:
+        value = 3600;
+        break;
+      default:
+        value = spell.duration2;
+        break;
+    }
+
+    return (spell.duration2 > 0 && value > spell.duration2) ? spell.duration2 : value;
+  }  
+
+exports.calculateSpellDamage = (playerLevel, wornSpellDamage, spell) =>
+{
+  let spellDamage = 0;
+
+  if ((playerLevel - spell.level) < 10)
+  {
+    let multiplier = 0.2499;
+    let totalCastTime = spell.castTime + ((spell.recastTime > spell.lockoutTime) ? spell.recastTime : spell.lockoutTime);
+
+    if (totalCastTime >= 2500 && totalCastTime <= 7000)
+    {
+      multiplier = .000167 * (totalCastTime - 1000);
+    }
+    else if(totalCastTime > 7000)
+    {
+      multiplier = totalCastTime / 7000;
+    }
+
+    spellDamage = wornSpellDamage * multiplier;
+  }
+
+  return spellDamage;
+}
+
 exports.calculateValue = (calc, base1, max, tick, playerLevel) =>
 {
   // default to base1 or max depending on normal calc values
@@ -214,96 +306,4 @@ exports.calculateValue = (calc, base1, max, tick, playerLevel) =>
   }
 
   return result;
-}
-
-exports.calculateDuration = (playerLevel, spell) =>
-  {
-    let value = 0;
-    switch (spell.duration1)
-    {
-      case 0:
-        value = 0;
-        break;
-      case 1:
-        value = Math.trunc(playerLevel / 2) || value;
-        break;
-      case 2:
-        value = Math.trunc(playerLevel / 2) + 5;
-        value = value < 6 ? 6 : value;
-          break;
-      case 3:
-        value = playerLevel * 30;
-        break;
-      case 4:
-        value = 50;
-        break;
-      case 5:
-        value = 2;
-        break;
-      case 6:
-        value = Math.trunc(playerLevel / 2);
-        break;
-      case 7:
-        value = playerLevel;
-        break;
-      case 8:
-        value = playerLevel + 10;
-        break;
-      case 9:
-        value = playerLevel * 2 + 10;
-        break;
-      case 10:
-        value = playerLevel * 30 + 10;
-        break;
-      case 11:
-        value = (playerLevel + 3) * 30;
-        break;
-      case 12:
-        value = Math.trunc(playerLevel / 2) || 1;
-        break;
-      case 13:
-        value = playerLevel * 4 + 10;
-        break;
-      case 14:
-        value = playerLevel * 5 + 10;
-        break;
-      case 15:
-        value = (playerLevel * 5 + 50) * 2;
-        break;
-      case 50:
-        value = 72000;
-        break;
-      case 3600:
-        value = 3600;
-        break;
-      default:
-        value = spell.duration2;
-        break;
-    }
-
-    return (spell.duration2 > 0 && value > spell.duration2) ? spell.duration2 : value;
-  }  
-
-exports.calculateSpellDamage = (playerLevel, wornSpellDamage, spell) =>
-{
-  let spellDamage = 0;
-
-  if ((playerLevel - spell.level) < 10)
-  {
-    let multiplier = 0.2499;
-    let totalCastTime = spell.castTime + ((spell.recastTime > spell.lockoutTime) ? spell.recastTime : spell.lockoutTime);
-
-    if (totalCastTime >= 2500 && totalCastTime <= 7000)
-    {
-      multiplier = .000167 * (totalCastTime - 1000);
-    }
-    else if(totalCastTime > 7000)
-    {
-      multiplier = totalCastTime / 7001;
-    }
-
-    spellDamage = wornSpellDamage * multiplier;
-  }
-
-  return spellDamage;
 }

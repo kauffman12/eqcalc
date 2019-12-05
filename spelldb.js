@@ -49,18 +49,19 @@ class SpellDatabase
     if (data && data['spells'])
     {
       this.spells = data['spells'];
-      Object.getOwnPropertyNames(this.spells).forEach(id =>
+      Object.getOwnPropertyNames(this.spells).forEach(prop =>
       {
-        if (this.spells[id].group > 0)
+        let spell = this.spells[prop];
+        if (spell && spell.group > 0)
         {
-          let list = this.spellGroups.get(this.spells[id].group) || new Set();
-          list.add(id);
-          this.spellGroups.set(this.spells[id].group, list);
+          let list = this.spellGroups.get(spell.group) || new Set();
+          list.add(spell.id);
+          this.spellGroups.set(spell.group, list);
 
-          let bestSpell = this.bestSpellInGroup.get(this.spells[id].group);
-          if (!bestSpell || bestSpell < id)
+          let bestSpell = this.bestSpellInGroup.get(spell.group);
+          if (!bestSpell || bestSpell < spell.id)
           {
-            this.bestSpellInGroup.set(this.spells[id].group, id);
+            this.bestSpellInGroup.set(spell.group, spell.id);
           }
         }
       });

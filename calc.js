@@ -12,7 +12,7 @@ const MaxHitsTypes =
   OUTGOING: 4, MATCHING: 7
 }
 
-const NON_CRIT_FOCUS_SPAS = [ 124, 127, 286, 296, 297, 302, 303, 399, 413, 461, 462, 483, 484, 507 ];
+const NON_CRIT_FOCUS_SPAS = [ 124, 127, 128, 129, 132, 286, 296, 297, 302, 303, 399, 413, 461, 462, 483, 484, 507 ];
 
 class Effects
 {
@@ -311,32 +311,46 @@ class PlayerState
             }
             break;
 
-          // Crit Rate Modifiers that do follow the normal rules
-          case 212:
+          // SPAs that follow the normal rules, may or may not support a range of values, and they do not support stacking
+          case 124: case 127: case 132: case 212: case 286: case 296: case 297: case 302: case 303: 
+          case 399: case 413: case 461: case 462: case 483: case 484: case 507:
             // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
             checks = this.processUpdates(category, checks, effect) ? new LimitChecks() : checks;
             
-            // if base2 is specified than assume a range of values are possible between base1 and base2
-            // may as well roll a value here
-            if (spell.focusable)
-            {
-              this.addValue(category, slot, slot.base1);  
-            }
-            break;
-
-          // Spell Focus - supports a range of values
-          case 124: case 127: case 286: case 296: case 297: case 302: case 303: case 399: case 413: case 461: case 462: case 483: case 484: case 507:   
-            // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
-            checks = this.processUpdates(category, checks, effect) ? new LimitChecks() : checks;
- 
-            // don't attempt anything that would use a charge if we're in a twincast or dot tick
+            // ignore twincast if we're in a twincast
             if (spell.focusable && (slot.spa !== 399 || initialCast))
             {
-              // if base2 is specified than assume a range of values are possible between base1 and base2
-              // may as well roll a value here
-              let value = (slot.base2 === 0) ? slot.base1 : Utils.randomInRange(slot.base2, slot.base1);
-              this.addValue(category, slot, value);
-            }
+              if (slot.base1 > 0)
+              {
+                let increase = (slot.base2 === 0 || slot.base1 === slot.base2) ? slot.base1 : Utils.randomInRange(slot.base2, slot.base1);
+                this.addValue(category, slot.spa, -1, increase, Math.max(slot.base1, slot.base2)); 
+              }
+              else
+              {
+                let decrease = slot.base2 !== 0 ? slot.base1 : Utils.randomInRange(slot.base1, slot.base2);
+                this.addValue(category, slot.spa, -1, decrease, Math.min(slot.base1, slot.base2));
+              }
+            }            
+            break;
+
+          // SPAs stat are similar to the previous but the value ranges are calculaged differently
+          case 128: case 129:
+            // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
+            checks = this.processUpdates(category, checks, effect) ? new LimitChecks() : checks;
+            
+            if (spell.focusable)
+            {
+              if (slot.base1 > 0)
+              {
+                let increase = spell.beneficial ? slot.base1 : Utils.randomInRange(slot.base2, slot.base1);
+                this.addValue(category, slot.spa, -1, increase, Math.max(slot.base1, slot.base2)); 
+              }
+              else
+              {
+                let decrease = slot.base2 === 0 ? slot.base1 : Utils.randomInRange(slot.base1, slot.base2);
+                this.addValue(category, slot.spa, -1, decrease, Math.min(slot.base1, slot.base2));
+              }
+            }            
             break;
 
           // Limit Checks
@@ -479,23 +493,23 @@ class PlayerState
     });
   }
 
-  addValue(category, slot, value)
+  addValue(category, spa, num, value, compareValue)
   {
-    let key = slot.num + '-' + slot.spa;
+    let key = num + '-' + spa;
     let updatedValue = this.valueProcessMap.get(key) || {};
+    compareValue = compareValue || value;
 
-    if (updatedValue.max === undefined || updatedValue.max < value)
+    let handledSlots = category.get(spa);
+    let currentValue = handledSlots ? handledSlots.get(num) || 0 : 0;
+    let max = currentValue >= 0 ? Math.max(compareValue, currentValue) : Math.min(compareValue, currentValue);
+    if (!handledSlots || !handledSlots.has(num) || max > handledSlots.get(num))
     {
-      let handledSlots = category.get(slot.spa);
-      let max = handledSlots ? Math.max(value, handledSlots.get(slot.num) || 0) : value;
-      if (!handledSlots || !handledSlots.has(slot.num) || max > handledSlots.get(slot.num))
-      {
-        updatedValue.spa = slot.spa;
-        updatedValue.num = slot.num;
-        updatedValue.max = max;
-        this.valueProcessMap.set(key, updatedValue);
-      }  
-    }
+      updatedValue.spa = spa;
+      updatedValue.num = num;
+      updatedValue.max = max;
+      updatedValue.value = value;
+      this.valueProcessMap.set(key, updatedValue);
+    }  
   }
 
   processUpdates(category, checks, effect, complete = false)
@@ -509,7 +523,7 @@ class PlayerState
       {
         this.valueProcessMap.forEach(updatedValue =>
         {
-          this.updateCategory(category, updatedValue.spa, updatedValue.num, updatedValue.max);
+          this.updateCategory(category, updatedValue.spa, updatedValue.num, updatedValue.value);
 
           // only attempt to count charges if limits were required to pass
           if (effect.maxHits > 0 && effect.maxHitsType === MaxHitsTypes.MATCHING)
@@ -547,8 +561,8 @@ class PlayerState
     let anyRemaining = false;
     this.valueProcessMap.forEach(updatedValue =>
     {
-      let reduced = Math.trunc(updatedValue.max - (updatedValue.max * amount / 100));
-      updatedValue.max = reduced > 0 ? reduced : 0;
+      let reduced = Math.trunc(updatedValue.value - (updatedValue.value * amount / 100));
+      updatedValue.value = reduced > 0 ? reduced : 0;
       anyRemaining = (reduced > 0) ? true : anyRemaining;
     });
 
@@ -556,29 +570,49 @@ class PlayerState
   }
 }
 
-let spells = new SpellDatabase(Classes.DRU);
-let state = new PlayerState(spells, 115, Classes.DRU, 3000);
-state.addSpell(51090);     // Improved Twincast
-
-let nbw = spells.getSpell(56030);
-for (let i = 0; i < 20; i++)
-{
-  console.debug(state.cast(nbw));
-}
-
 /*
+let spells = new SpellDatabase(Classes.NEC);
+let state = new PlayerState(spells, 115, Classes.NEC, 3000);
+
+state.addAA(628, 33);     // Critical Afflication
+state.addAA(3815, 39);     // Critical Afflication
+state.addAA(613, 7);      // Enhanced Decay
+state.addAA(1072, 11);    // 20% Pyre
+//state.addSpell(51006);    // Enc Synergy
+//state.addSpell(56136);    // Aria
+//state.addWorn(50833);     // Threads
+//state.addSpell(41175);    // Funeral Pyre
+//state.addSpell(51484);    // Hand of Death
+
+let spell = spells.getSpell(29460);
+for (let i = 0; i < 1; i++)
+{
+  console.debug(state.cast(spell));
+}
+*/
+
 let spells = new SpellDatabase(Classes.WIZ);
-let state = new PlayerState(spells, 115, Classes.WIZ, 3000);
+let state = new PlayerState(spells, 115, Classes.WIZ, 1279);
 state.addAA(114, 35);      // Fury of Magic
 state.addAA(397, 36);      // Destructive Fury
 state.addAA(1263, 8);      // Destructive Adept
 state.addAA(850, 20);      // Sorc Vengeance
-state.addSpell(51502);     // Improved Familiar
-state.addSpell(51508);     // Frenzied Devestation
-state.addSpell(51090);     // Improved Twincast
+state.addAA(1292, 11);     // Skyblaze Focus
+//state.addWorn(57723);    // Skyfire Type 3
+state.addWorn(45815);      // WIZ Ethereal Focus 9
+//state.addWorn(49694);    // Eyes of Life and Decay
+//state.addSpell(51538);   // Fury of the Gods
+state.addSpell(29838);     // Weakness 
+//state.addSpell(49266);   // Enc Dicho 1
+state.addSpell(56136);     // Aria
+state.addWorn(45947);
+
+
+//state.addSpell(51502);     // Improved Familiar
+//state.addSpell(51508);     // Frenzied Devestation
+//state.addSpell(51090);     // Improved Twincast
 
 //state.addSpell(spells.getSpell(18882));  // Twincast
-//state.addAA(spells.getAA(1292, 9));
 //state.addSpell(spells.getSpell(31526));
 //state.addSpell(spells.getSpell(58165));
 //state.addSpell(spells.getSpell(51342));
@@ -587,14 +621,11 @@ state.addSpell(51090);     // Improved Twincast
 //state.addSpell(spells.getSpell(51006));
 //state.addSpell(spells.getSpell(51526));
 
-//state.addWorn(spells.getWorn(49694));    // Eyes of Life and Decay
-//state.addWorn(spells.getWorn(45815));    // WIZ Ethereal Focus 9
 //state.addSpell(spells.getSpell(48965));  // Wizard Spire
 //state.addSpell(spells.getSpell(51185));  // Great Wolf
 //state.addSpell(spells.getSpell(51134));  // Auspice
 //state.addSpell(spells.getSpell(36942));  // Arcane Destruction
 //state.addSpell(spells.getSpell(41195));  // Arcane Fury
-//state.addSpell(spells.getSpell(51538));  // Fury of the Gods
 //state.addSpell(spells.getSpell(51199));  // Season's Wrath
 //state.addSpell(spells.getSpell(55105));  // Sanctity 
 //state.addSpell(spells.getSpell(51006));  // Enc Synergy
@@ -602,9 +633,8 @@ state.addSpell(51090);     // Improved Twincast
 let dissident = spells.getSpell(58149);
 let skyfire = spells.getSpell(56872);
 let stormjolt = spells.getSpell(58164);
-for (let i = 0; i < 2; i++ )
+for (let i = 0; i < 1000; i++ )
 {
-  console.debug("Cast #" + (i+1));
-  console.debug(state.cast(dissident));
+  //console.debug("Cast #" + (i+1));
+  console.debug(state.cast(skyfire));
 } 
-*/
