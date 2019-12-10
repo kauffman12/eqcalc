@@ -1,5 +1,12 @@
-exports.randomInRange = (high, low) => Math.floor(Math.random() * (high - low + 1)) + low;
 exports.roundAsDec32 = (value) => Math.round(+(value.toFixed(7)));
+
+exports.randomInRange = (x, y) => 
+{
+  let high = x > y ? x : y;
+  let low = x < y ? x : y;
+
+  return Math.floor(Math.random() * (high - low + 1)) + low;
+}
 
 exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, isNuke, ticks, finalEffects) =>
 {
@@ -64,74 +71,6 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, isNu
 
   return { total: total, crit: crit };
 }
-
-exports.calculateDuration = (playerLevel, spell) =>
-  {
-    let value = 0;
-    switch (spell.duration1)
-    {
-      case 0:
-        value = 0;
-        break;
-      case 1:
-        value = Math.trunc(playerLevel / 2) || 1;
-        break;
-      case 2:
-        value = Math.trunc(playerLevel / 2) + 5;
-        value = value < 6 ? 6 : value;
-          break;
-      case 3:
-        value = playerLevel * 30;
-        break;
-      case 4:
-        value = 50;
-        break;
-      case 5:
-        value = 2;
-        break;
-      case 6:
-        value = Math.trunc(playerLevel / 2);
-        break;
-      case 7:
-        value = playerLevel;
-        break;
-      case 8:
-        value = playerLevel + 10;
-        break;
-      case 9:
-        value = playerLevel * 2 + 10;
-        break;
-      case 10:
-        value = playerLevel * 30 + 10;
-        break;
-      case 11:
-        value = (playerLevel + 3) * 30;
-        break;
-      case 12:
-        value = Math.trunc(playerLevel / 2) || 1;
-        break;
-      case 13:
-        value = playerLevel * 4 + 10;
-        break;
-      case 14:
-        value = playerLevel * 5 + 10;
-        break;
-      case 15:
-        value = (playerLevel * 5 + 50) * 2;
-        break;
-      case 50:
-        value = 72000;
-        break;
-      case 3600:
-        value = 3600;
-        break;
-      default:
-        value = spell.duration2;
-        break;
-    }
-
-    return (spell.duration2 > 0 && value > spell.duration2) ? spell.duration2 : value;
-  }  
 
 exports.calculateSpellDamage = (playerLevel, wornSpellDamage, spell) =>
 {
