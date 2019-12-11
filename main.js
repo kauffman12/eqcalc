@@ -2,66 +2,33 @@ const Utils = require('./utils.js');
 const SpellDatabase = require('./spelldb.js');
 const { Effects, EffectsCategory } = require('./effects.js');
 
-const Classes =
-{
-  WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512,  SHM: 1024, NEC: 2048,
-  WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536
-}
-
-const MaxHitsTypes =
-{
-  OUTGOING: 4, MATCHING: 7
-}
-
 class PlayerState
 {
   constructor(spellDB, level, playerClass, spellDamage)
   {
-    this.spellDB = spellDB;
-    this.level = level;
-    this.playerClass = playerClass;
-    this.spellDamage = spellDamage;
     this.baseDoTCritChance = 0;
     this.baseDoTCritMultiplier = 0;
     this.baseNukeCritChance = 0;
     this.baseNukeCritMultiplier = 100;
-    this.currentTime = 0;
+    this.castQueue = [];
     this.chargedSpells = new Map();
+    this.currentTime = 0;
+    this.level = level;
     this.passiveAAMap = new Map();
+    this.playerClass = playerClass;
+    this.spellDB = spellDB;
+    this.spellDamage = spellDamage;
     this.spellMap = new Map();
     this.wornMap = new Map();
   }
 
-  addEffect(id, effect, map)
+  run(seconds)
   {
-    if (effect)
+    let state = this;
+    this.castQueue.forEach(spell =>
     {
-      map.set(id, effect);
-    }
-    else
-    {
-      console.debug('attempting to add unknown effect ' + id);
-    }
-  }
-
-  addAA(id, rank)
-  {
-    this.addEffect(id, this.spellDB.getAA(id, rank), this.passiveAAMap);
-  }
-
-  addWorn(id)
-  {
-    this.addEffect(id, this.spellDB.getWorn(id), this.wornMap);
-  }
-
-  addSpell(id)
-  {
-    this.addEffect(id, this.spellDB.getSpell(id), this.spellMap);
-  }
-
-  calculateBaseNukeCritChance()
-  {
-    return this.baseNukeCritChance + (this.playerClass == Classes.WIZ ? Math.ceil(Math.random() * 3.0) : 0);
+      console.debug(state.cast(spell));
+    });
   }
 
   cast(spell)
@@ -182,7 +149,7 @@ class PlayerState
     let finalEffects = new Effects();
     finalEffects.doTCritChance = this.baseDoTCritChance;
     finalEffects.doTCritMultiplier = this.baseDoTCritMultiplier;
-    finalEffects.nukeCritChance = this.calculateBaseNukeCritChance();
+    finalEffects.nukeCritChance = Utils.calculateBaseNukeCritChance(this.baseNukeCritChance);
     finalEffects.nukeCritMultiplier = this.baseNukeCritMultiplier;
     
     [passiveAACategory, spellCategory, wornCategory].forEach(category =>
@@ -247,7 +214,7 @@ class PlayerState
               }
 
               // update charged map if needed
-              if (slot.effect && slot.effect.maxHitsType === MaxHitsTypes.MATCHING)
+              if (slot.effect && slot.effect.maxHitsType === Utils.MaxHitsTypes.MATCHING)
               {
                 this.chargedSpells.set(slot.spa, slot.effect);
               }
@@ -269,10 +236,41 @@ class PlayerState
     return finalEffects;
   }
 
+  addEffect(id, effect, map)
+  {
+    if (effect)
+    {
+      map.set(id, effect);
+    }
+    else
+    {
+      console.debug('attempting to add unknown effect ' + id);
+    }
+  }
+
+  addAA(id, rank)
+  {
+    this.addEffect(id, this.spellDB.getAA(id, rank), this.passiveAAMap);
+  }
+
+  addWorn(id)
+  {
+    this.addEffect(id, this.spellDB.getWorn(id), this.wornMap);
+  }
+
+  addSpell(id)
+  {
+    this.addEffect(id, this.spellDB.getSpell(id), this.spellMap);
+  }
+
+  addToQueue(id)
+  {
+    this.castQueue.push(this.spellDB.getSpell(id));
+  }  
 }
 
-let spells = new SpellDatabase(Classes.WIZ);
-let state = new PlayerState(spells, 110, Classes.WIZ, 3000);
+let spells = new SpellDatabase(Utils.Classes.WIZ);
+let state = new PlayerState(spells, 110, Utils.Classes.WIZ, 3000);
 
 //state.addSpell(30618);
 //state.addSpell(41175);
@@ -288,12 +286,7 @@ state.addAA(850, 20);       // Sorc Vengeance
 //state.addWorn(9522);      // Fire 1 to 25% max level 75
 state.addSpell(51090);     // Improved Twincast
 
-let dissident = spells.getSpell(58149);
-let skyfire = spells.getSpell(56872);
-let stormjolt = spells.getSpell(58164);
-
-let spell = spells.getSpell(56695);
-for (let i = 0; i < 5; i++ )
-{
-  console.debug(state.cast(stormjolt));
-}
+state.addToQueue(56872);   // skyfire
+state.addToQueue(56872);   // skyfire
+state.addToQueue(56872);   // skyfire
+state.run();

@@ -1,3 +1,11 @@
+exports.Classes =
+{
+  WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512,  SHM: 1024, NEC: 2048,
+  WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536
+}
+
+exports.MaxHitsTypes = { OUTGOING: 4, MATCHING: 7 }
+
 exports.roundAsDec32 = (value) => Math.round(+(value.toFixed(7)));
 
 exports.randomInRange = (x, y) => 
@@ -6,6 +14,11 @@ exports.randomInRange = (x, y) =>
   let low = x < y ? x : y;
 
   return Math.floor(Math.random() * (high - low + 1)) + low;
+}
+
+exports.calculateBaseNukeCritChance = (baseNukeCritChance) =>
+{
+  return baseNukeCritChance + (this.playerClass == exports.Classes.WIZ ? Math.ceil(Math.random() * 3.0) : 0);
 }
 
 exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, isNuke, ticks, finalEffects) =>
