@@ -18,11 +18,11 @@ class EffectsCategory
     this.processList = null;
   }
 
-  build(effectMap, spell)
+  build(effectList, spell)
   {
     let category = new Map();
 
-    effectMap.forEach(effect =>
+    effectList.forEach(effect =>
     {
       this.processChecks = new LimitChecks();
       this.processList = [];

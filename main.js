@@ -11,23 +11,41 @@ class PlayerState
     this.baseNukeCritChance = 0;
     this.baseNukeCritMultiplier = 100;
     this.castQueue = [];
-    this.chargedSpells = new Map();
+    this.chargedSpellList = [];
     this.currentTime = 0;
+    this.increaseBuffDuration = 2.0;
     this.level = level;
-    this.passiveAAMap = new Map();
+    this.passiveAAList = [];
     this.playerClass = playerClass;
     this.spellDB = spellDB;
     this.spellDamage = spellDamage;
-    this.spellMap = new Map();
-    this.wornMap = new Map();
+    this.spellList = [];
+    this.wornList = [];
   }
 
   run(seconds)
   {
-    let state = this;
-    this.castQueue.forEach(spell =>
+    this.initSpells();
+
+    while (this.currentTime < seconds)
     {
-      console.debug(state.cast(spell));
+      let me = this;
+      this.castQueue.forEach(spell => console.debug(me.cast(spell)));
+
+      this.currentTime += 6;
+      this.spellList = this.spellList.filter(spell => spell.expireTime > me.currentTime);
+    }
+  }
+
+  initSpells()
+  {
+    let me = this;
+
+    this.spellList.forEach(spell =>
+    {
+      spell.updateDuration(me.level);
+      spell.duration *= (spell.focusable) ? me.increaseBuffDuration : 1;
+      spell.expireTime = me.currentTime + spell.duration * 6;
     });
   }
 
@@ -126,25 +144,25 @@ class PlayerState
   charge()
   {
     let alreadyCharged = new Map();
-    Array.from(this.chargedSpells.values()).forEach(spell => 
+    this.chargedSpellList.forEach(spell => 
     {
-      if (!alreadyCharged.has(spell.id) && --spell.remainingHits === 0 && this.spellMap.has(spell.id))
+      if (!alreadyCharged.has(spell.id) && --spell.remainingHits === 0)
       {
-        this.spellMap.delete(spell.id);
+        this.spellList = this.spellList.filter(existing => existing.id !== spell.id);
       }
 
       alreadyCharged.set(spell.id, true);
     });
     
-    this.chargedSpells.clear();
+    this.chargedSpellList = [];
   }
 
   buildEffects(spell)
   {  
     let categoryBuilder = new EffectsCategory(this.spellDB);
-    let passiveAACategory = categoryBuilder.build(this.passiveAAMap, spell);
-    let spellCategory = categoryBuilder.build(this.spellMap, spell);
-    let wornCategory = categoryBuilder.build(this.wornMap, spell);
+    let passiveAACategory = categoryBuilder.build(this.passiveAAList, spell);
+    let spellCategory = categoryBuilder.build(this.spellList, spell);
+    let wornCategory = categoryBuilder.build(this.wornList, spell);
 
     let finalEffects = new Effects();
     finalEffects.doTCritChance = this.baseDoTCritChance;
@@ -170,7 +188,7 @@ class PlayerState
               finalEffects.nukeCritChance += slot.base1;
               break;
             case 375:
-              finalEffects.doTCritMultiplier += value;
+              finalEffects.doTCritMultiplier += slot.base1;
               break;
     
             case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: 
@@ -216,7 +234,7 @@ class PlayerState
               // update charged map if needed
               if (slot.effect && slot.effect.maxHitsType === Utils.MaxHitsTypes.MATCHING)
               {
-                this.chargedSpells.set(slot.spa, slot.effect);
+                this.chargedSpellList.push(slot.effect);
               }
   
               finalEffects['spa' + spa] += value;
@@ -236,11 +254,11 @@ class PlayerState
     return finalEffects;
   }
 
-  addEffect(id, effect, map)
+  addEffect(id, effect, list)
   {
     if (effect)
     {
-      map.set(id, effect);
+      list.push(effect);
     }
     else
     {
@@ -250,17 +268,17 @@ class PlayerState
 
   addAA(id, rank)
   {
-    this.addEffect(id, this.spellDB.getAA(id, rank), this.passiveAAMap);
+    this.addEffect(id, this.spellDB.getAA(id, rank), this.passiveAAList);
   }
 
   addWorn(id)
   {
-    this.addEffect(id, this.spellDB.getWorn(id), this.wornMap);
+    this.addEffect(id, this.spellDB.getWorn(id), this.wornList);
   }
 
   addSpell(id)
   {
-    this.addEffect(id, this.spellDB.getSpell(id), this.spellMap);
+    this.addEffect(id, this.spellDB.getSpell(id), this.spellList);
   }
 
   addToQueue(id)
@@ -285,8 +303,7 @@ state.addAA(850, 20);       // Sorc Vengeance
 //state.addSpell(51502);     // Improved Familiar
 //state.addWorn(9522);      // Fire 1 to 25% max level 75
 state.addSpell(51090);     // Improved Twincast
+state.addSpell(51599);     // IOG
 
 state.addToQueue(56872);   // skyfire
-state.addToQueue(56872);   // skyfire
-state.addToQueue(56872);   // skyfire
-state.run();
+state.run(300);
