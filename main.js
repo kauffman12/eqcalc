@@ -38,9 +38,18 @@ class PlayerState
     {
       let spell = this.castQueue[0];
       let result = this.cast(spell);
-      result.cast = count++;
-      console.debug(result);
+      result.cast = count;
+      console.debug(result.damage);
 
+      if (result.needTwincast)
+      {
+        let twincast = this.cast(spell);
+        twincast.cast = count;
+        twincast.damage.twincast = true;
+        console.debug(twincast.damage);
+      }
+
+      count++;
       this.currentTime += 6000;
       this.spellList = this.spellList.filter(spell => spell.expireTime > this.currentTime);
     }
@@ -132,10 +141,10 @@ class PlayerState
     effectsBuilder.addCategory(this.wornList, spell);
 
     let finalEffects = effectsBuilder.buildEffects();
-    finalEffects.doTCritChance = this.baseDoTCritChance;
-    finalEffects.doTCritMultiplier = this.baseDoTCritMultiplier;
-    finalEffects.nukeCritChance = Utils.calculateBaseNukeCritChance(this.baseNukeCritChance);
-    finalEffects.nukeCritMultiplier = this.baseNukeCritMultiplier;
+    finalEffects.doTCritChance += this.baseDoTCritChance;
+    finalEffects.doTCritMultiplier += this.baseDoTCritMultiplier;
+    finalEffects.nukeCritChance += Utils.calculateBaseNukeCritChance(this.baseNukeCritChance);
+    finalEffects.nukeCritMultiplier += this.baseNukeCritMultiplier;
 
     // DoT classes have same base 100% but it does not stack with Destructive Cascade
     // unlike Destructive Fury and Nukes
@@ -193,7 +202,7 @@ state.addWorn(57723);      // Skyfire Type 3
 state.addAA(1263, 8);      // Destructive Adept
 state.addAA(850, 20);      // Sorc Vengeance
 state.addSpell(51090);     // Improved Twincast
-//state.addSpell(51502);    // Improved Familiar
+state.addSpell(51502);    // Improved Familiar
 //state.addWorn(9522);      // Fire 1 to 25% max level 75
 //state.addSpell(51599);    // IOG
 
