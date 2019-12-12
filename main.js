@@ -12,6 +12,7 @@ class PlayerState
     this.baseNukeCritMultiplier = 100;
     this.castQueue = [];
     this.currentTime = 0;
+    this.freeze = false;
     this.increaseBuffDuration = 2.0;
     this.lagTime = lagTime;
     this.level = level;
@@ -21,6 +22,11 @@ class PlayerState
     this.spellDamage = spellDamage;
     this.spellList = [];
     this.wornList = [];
+  }
+
+  freezeBuffs(freeze)
+  {
+    this.freeze = (freeze === true);
   }
 
   run(seconds)
@@ -35,57 +41,67 @@ class PlayerState
     this.castQueue.forEach(info => info.spell.updateDuration(this.level));
 
     let count = 1;
+    let endTime = (seconds * 1000);
     let lockouts = [];
-    while (this.currentTime < (seconds * 1000))
+    let results = [];
+    while (this.currentTime <= endTime)
     {
       let info = this.castQueue.find(info => info.readyTime <= this.currentTime && !lockouts.find(lock => lock.timerId === info.spell.timerId));
 
       if (info)
       {
         let spell = info.spell;
-        let results = this.cast(spell);
-        results.cast = count;
-        results.name = spell.name;
-        results.time = this.currentTime;
-        console.debug(results);
- 
-        if (results.needTwincast)
-        {
-          let twincast = this.cast(spell);
-          twincast.cast = count;
-          twincast.name = spell.name;
-          twincast.damage.twincast = true;
-          console.debug(twincast);
-        }
-
-        info.readyTime = this.currentTime + results.actualCastTime + spell.recastTime;
+        let result = this.cast(spell);
+        info.readyTime = this.currentTime + result.actualCastTime + spell.recastTime;
 
         if (spell.timerId)
         {
           lockouts.push({ timerId: spell.timerId, unlockTime: info.readyTime });
         }
 
-        count++;
-        this.currentTime += results.actualCastTime + spell.lockoutTime + this.lagTime;
+        this.currentTime += result.actualCastTime + spell.lockoutTime + this.lagTime;
+
+        if (this.currentTime <= endTime)
+        {
+          result.cast = count;
+          result.time = this.currentTime;
+          results.push(result);
+   
+          if (result.needTwincast)
+          {
+            let twincast = this.cast(spell);
+            twincast.cast = count;
+            twincast.damage.twincast = true;
+            results.push(twincast);
+          }
+
+          count++;
+        }
       }
       else
       {
-        this.currentTime += 100;
+        this.currentTime += 200;
       }
 
-      this.spellList = this.spellList.filter(spell => spell.expireTime > this.currentTime);
+      if (!this.freeze)
+      {
+        this.spellList = this.spellList.filter(spell => spell.expireTime > this.currentTime);
+      }
+
       lockouts = lockouts.filter(lock => lock.unlockTime > this.currentTime);
     }
+
+    return results;
   }
 
   cast(spell)
   {
     let finalEffects = this.buildEffects(spell);
 
-    let results = {};
-    results.needTwincast = finalEffects.spa399 !== undefined && Math.random() * 100 <= finalEffects.spa399;
-    results.duration = spell.duration + finalEffects.spa128;
-    results.actualCastTime = spell.castTime - Math.trunc(finalEffects.spa127 * spell.castTime / 100);
+    let result = { name: spell.name };
+    result.needTwincast = finalEffects.spa399 !== undefined && Math.random() * 100 <= finalEffects.spa399;
+    result.duration = spell.duration + finalEffects.spa128;
+    result.actualCastTime = spell.castTime - Math.trunc(finalEffects.spa127 * spell.castTime / 100);
 
     spell.slotList.forEach(slot =>
     {
@@ -96,8 +112,8 @@ class PlayerState
 
           if (proc374 && Math.random() * 100 <= slot.base1)
           {
-            results.procs = results.procs || [];
-            results.procs.push(allResults.concat(this.cast(proc374)));
+            result.procs = result.procs || [];
+            result.procs.push(this.cast(proc374));
           }
           break;
 
@@ -106,21 +122,21 @@ class PlayerState
 
           if (proc470)
           {
-            results.procs = results.procs || [];
-            results.procs.push(allResults.concat(this.cast(proc470)));
+            result.procs = result.procs || [];
+            result.procs.push(this.cast(proc470));
           }
           break;
 
         case 0: case 79:
           // execute right away if it's a nuke
-          if ((results.duration === 0 || slot.spa === 79))
+          if ((result.duration === 0 || slot.spa === 79))
           {
             // base damage can increase with time and needs to be calculated per tick
             let baseDamage = Math.abs(Utils.calculateValue(slot.calc, slot.base1, slot.max, 1, this.level));
 
             // add damage for one hit / tick
-            results.damage = Utils.calculateDamage(this.level, this.spellDamage, spell, baseDamage, true, 1, finalEffects);
-            results.damage.spa = slot.spa;
+            result.damage = Utils.calculateDamage(this.level, this.spellDamage, spell, baseDamage, true, 1, finalEffects);
+            result.damage.spa = slot.spa;
           }
           else
           {
@@ -131,7 +147,7 @@ class PlayerState
       }
     });
 
-    if (results.duration > 0)
+    if (result.duration > 0)
     {
       this.addSpell(spell.id);
     }
@@ -139,7 +155,7 @@ class PlayerState
     // charge spells
     this.charge(finalEffects.chargedSpellList);    
 
-    return results;
+    return result;
   }
 
   charge(chargedSpellList)
@@ -212,7 +228,9 @@ class PlayerState
   }  
 }
 
-let state = new PlayerState(Utils.Classes.WIZ, 110, 3000, 100);
+let state = new PlayerState(Utils.Classes.WIZ, 110, 3000, 200);
+state.freezeBuffs(true);
+
 state.addAA(114, 35);      // Fury of Magic
 state.addAA(397, 28);      // Destructive Fury
 state.addAA(1292, 11);     // Skyblaze Focus
@@ -222,13 +240,43 @@ state.addWorn(46666);      // Legs haste
 state.addWorn(57723);      // Skyfire Type 3
 state.addAA(1263, 8);      // Destructive Adept
 state.addAA(850, 20);      // Sorc Vengeance
+state.addSpell(18882);
 //state.addSpell(51090);     // Improved Twincast
 state.addSpell(51502);    // Improved Familiar
 //state.addWorn(9522);      // Fire 1 to 25% max level 75
-//state.addSpell(51599);    // IOG
+state.addSpell(51599);    // IOG
 
-//state.addToQueue(56872);   // skyfire
-//state.addToQueue(56848);   // icefloe
-state.addToQueue(56796);   // cloudburst
-state.addToQueue(56851);   // flashburn
-state.run(30);
+state.addToQueue(58149);   // dissident
+state.addToQueue(56872);   // skyfire
+state.addToQueue(56848);   // icefloe
+//state.addToQueue(56796);   // cloudburst
+//state.addToQueue(56851);   // flashburn
+
+let runTime = 10000;
+let totalDamage = 0;
+let max = 0;
+
+state.run(runTime).forEach(result =>
+{
+  if (result.damage)
+  {
+    //console.debug(result.cast + ": " + result.name);
+    //console.debug(result.damage);
+    totalDamage += result.damage.total;
+    max = Math.max(max, result.damage.total);
+  }
+
+  if (result.procs)
+  {
+    result.procs.forEach(proc => 
+    {
+      //console.debug(result.cast + ": " + proc.name);
+      //console.debug(proc.damage);
+      totalDamage += proc.damage.total;
+      max = Math.max(max, proc.damage.total);
+    });
+  }
+});
+
+console.debug("DPS: " + Math.round(totalDamage / runTime));
+console.debug("MAX: " + max);
