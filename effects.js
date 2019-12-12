@@ -1,3 +1,5 @@
+const Utils = require('./utils.js');
+
 class Effects
 {
   constructor()
@@ -6,6 +8,8 @@ class Effects
     let me = this;
     [ 'doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier' ].forEach(prop => me[prop] = 0.0);
     [ 124, 127, 128, 132, 286, 296, 297, 302, 303, 399, 413, 461, 462, 483, 484, 507 ].forEach(spa => me['spa' + spa] = 0);
+
+    this.chargedSpellList = [];
   }
 }
 
@@ -14,13 +18,107 @@ class EffectsCategory
   constructor(spellDB)
   {
     this.spellDB = spellDB;
+    this.categories = [];
     this.processChecks = null;
     this.processList = null;
   }
 
-  build(effectList, spell)
+  getChargedSpells()
+  {
+    return this.chargedSpellList;
+  }
+
+  buildEffects()
+  {
+    let finalEffects = new Effects();
+    this.categories.forEach(category =>
+    {
+      category.forEach((slots, spa) =>
+      {
+        slots.forEach(slot =>
+        {
+          switch(slot.spa)
+          {
+            case 170: 
+              finalEffects.nukeCritMultiplier += slot.base1;
+              break;
+            case 273:
+              finalEffects.doTCritChance += slot.base1;
+              break;
+            case 212: case 294:
+              finalEffects.nukeCritChance += slot.base1;
+              break;
+            case 375:
+              finalEffects.doTCritMultiplier += slot.base1;
+              break;
+    
+            case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: 
+            case 399: case 413: case 461: case 462: case 483: case 484: case 507:
+              let value = 0;
+  
+              if (slot.base1 > 0)
+              {
+                if (spa === 128)
+                {
+                  value = spell.beneficial ? slot.base1 : Utils.randomInRange(slot.base2 || 1, slot.base1 || 1);                  
+                }
+                else
+                {
+                  value = (slot.base2 === 0 || slot.base1 === slot.base2) ? slot.base1 : Utils.randomInRange(slot.base2, slot.base1);
+                }
+              }
+              else
+              {
+                if (spa === 128)
+                {
+                  value = slot.base2 === 0 ? slot.base1 : Utils.randomInRange(slot.base1, -1);
+                }
+                else
+                {
+                  value = slot.base2 !== 0 ? slot.base1 : Utils.randomInRange(slot.base1, slot.base2);
+                }
+              }
+  
+              if (slot.reduceBy > 0)
+              {
+                value = Math.trunc(value * (1 - slot.reduceBy / 100));
+                value = value < 0 ? 0 : value;
+              }
+
+              // convert from percent to actual value
+              if (spa === 128)
+              {
+                let calc = Math.trunc(spell.duration * value / 100);
+                value = value > 0 ? Math.max(1, calc) : Math.min(-1, calc);
+              }
+
+              // update charged map if needed
+              if (slot.effect && slot.effect.maxHitsType === Utils.MaxHitsTypes.MATCHING)
+              {
+                finalEffects.chargedSpellList.push(slot.effect);
+              }
+  
+              finalEffects['spa' + spa] += value;
+
+              // SPA 127 has a max value
+              if (spa === 127 && finalEffects['spa127'] > 50)
+              {
+                finalEffects['spa127'] = 50;
+              }
+
+              break;
+          }  
+        });
+      });
+    });
+
+    return finalEffects;
+  }
+
+  addCategory(effectList, spell)
   {
     let category = new Map();
+    this.categories.push(category);
 
     effectList.forEach(effect =>
     {
@@ -66,7 +164,7 @@ class EffectsCategory
           case 134:
             // max level but also handles decay if base2 is set
             let difference = slot.base1 - spell.level;
-            this.processChecks.maxLevel = difference >= 0 || slot.base2 < 100;
+            this.processChecks.maxLevel = difference >= 0 || (slot.base2 > 0 && slot.base2 < 100);
 
             if (difference < 0)
             {
@@ -208,8 +306,6 @@ class EffectsCategory
       // process remaining
       this.processUpdates(category, true);
     });
-
-    return category;
   }
 
   processUpdates(category, complete = false)
@@ -286,8 +382,4 @@ class LimitChecks
   }  
 }
 
-module.exports = 
-{
-  Effects: Effects,
-  EffectsCategory: EffectsCategory
-}
+module.exports = EffectsCategory;
