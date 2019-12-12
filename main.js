@@ -4,7 +4,7 @@ const EffectsCategory = require('./effects.js');
 
 class PlayerState
 {
-  constructor(spellDB, level, playerClass, spellDamage)
+  constructor(playerClass, level = 115, spellDamage = 0, lagTime = 0)
   {
     this.baseDoTCritChance = 0;
     this.baseDoTCritMultiplier = 0;
@@ -13,10 +13,11 @@ class PlayerState
     this.castQueue = [];
     this.currentTime = 0;
     this.increaseBuffDuration = 2.0;
+    this.lagTime = lagTime;
     this.level = level;
     this.passiveAAList = [];
     this.playerClass = playerClass;
-    this.spellDB = spellDB;
+    this.spellDB = new SpellDatabase(playerClass);
     this.spellDamage = spellDamage;
     this.spellList = [];
     this.wornList = [];
@@ -31,27 +32,49 @@ class PlayerState
       spell.expireTime = this.currentTime + spell.duration * 6000;
     });
 
-    this.castQueue.forEach(spell => spell.updateDuration(this.level));
+    this.castQueue.forEach(info => info.spell.updateDuration(this.level));
 
     let count = 1;
+    let lockouts = [];
     while (this.currentTime < (seconds * 1000))
     {
-      let spell = this.castQueue[0];
-      let result = this.cast(spell);
-      result.cast = count;
-      console.debug(result.damage);
+      let info = this.castQueue.find(info => info.readyTime <= this.currentTime && !lockouts.find(lock => lock.timerId === info.spell.timerId));
 
-      if (result.needTwincast)
+      if (info)
       {
-        let twincast = this.cast(spell);
-        twincast.cast = count;
-        twincast.damage.twincast = true;
-        console.debug(twincast.damage);
+        let spell = info.spell;
+        let results = this.cast(spell);
+        results.cast = count;
+        results.name = spell.name;
+        results.time = this.currentTime;
+        console.debug(results);
+ 
+        if (results.needTwincast)
+        {
+          let twincast = this.cast(spell);
+          twincast.cast = count;
+          twincast.name = spell.name;
+          twincast.damage.twincast = true;
+          console.debug(twincast);
+        }
+
+        info.readyTime = this.currentTime + results.actualCastTime + spell.recastTime;
+
+        if (spell.timerId)
+        {
+          lockouts.push({ timerId: spell.timerId, unlockTime: info.readyTime });
+        }
+
+        count++;
+        this.currentTime += results.actualCastTime + spell.lockoutTime + this.lagTime;
+      }
+      else
+      {
+        this.currentTime += 100;
       }
 
-      count++;
-      this.currentTime += 6000;
       this.spellList = this.spellList.filter(spell => spell.expireTime > this.currentTime);
+      lockouts = lockouts.filter(lock => lock.unlockTime > this.currentTime);
     }
   }
 
@@ -62,7 +85,7 @@ class PlayerState
     let results = {};
     results.needTwincast = finalEffects.spa399 !== undefined && Math.random() * 100 <= finalEffects.spa399;
     results.duration = spell.duration + finalEffects.spa128;
-    results.castTime = spell.castTime - Math.trunc(finalEffects.spa127 * spell.castTime / 100);
+    results.actualCastTime = spell.castTime - Math.trunc(finalEffects.spa127 * spell.castTime / 100);
 
     spell.slotList.forEach(slot =>
     {
@@ -122,14 +145,14 @@ class PlayerState
   charge(chargedSpellList)
   {
     let alreadyCharged = new Map();
-    chargedSpellList.forEach(spell => 
+    chargedSpellList.forEach(data => 
     {
-      if (!alreadyCharged.has(spell.id) && --spell.remainingHits === 0)
+      if (!alreadyCharged.has(data.spell.id) && --data.remainingHits === 0)
       {
-        this.spellList = this.spellList.filter(existing => existing.id !== spell.id);
+        this.spellList = this.spellList.filter(existing => existing.id !== data.spell.id);
       }
 
-      alreadyCharged.set(spell.id, true);
+      alreadyCharged.set(data.spell.id, true);
     });
   }
 
@@ -185,13 +208,11 @@ class PlayerState
 
   addToQueue(id)
   {
-    this.castQueue.push(this.spellDB.getSpell(id));
+    this.castQueue.push({ spell: this.spellDB.getSpell(id), readyTime: 0 });
   }  
 }
 
-let spells = new SpellDatabase(Utils.Classes.WIZ);
-let state = new PlayerState(spells, 110, Utils.Classes.WIZ, 3000);
-
+let state = new PlayerState(Utils.Classes.WIZ, 110, 3000, 100);
 state.addAA(114, 35);      // Fury of Magic
 state.addAA(397, 28);      // Destructive Fury
 state.addAA(1292, 11);     // Skyblaze Focus
@@ -201,10 +222,13 @@ state.addWorn(46666);      // Legs haste
 state.addWorn(57723);      // Skyfire Type 3
 state.addAA(1263, 8);      // Destructive Adept
 state.addAA(850, 20);      // Sorc Vengeance
-state.addSpell(51090);     // Improved Twincast
+//state.addSpell(51090);     // Improved Twincast
 state.addSpell(51502);    // Improved Familiar
 //state.addWorn(9522);      // Fire 1 to 25% max level 75
 //state.addSpell(51599);    // IOG
 
-state.addToQueue(56872);   // skyfire
-state.run(300);
+//state.addToQueue(56872);   // skyfire
+//state.addToQueue(56848);   // icefloe
+state.addToQueue(56796);   // cloudburst
+state.addToQueue(56851);   // flashburn
+state.run(30);

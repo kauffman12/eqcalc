@@ -76,6 +76,7 @@ if os.path.isfile(DBSpellsFile):
     entry['resist'] = int(data[31])
     entry['target'] = int(data[32])
     entry['skill'] = int(data[34])
+    entry['timerId'] = int(data[100])
     entry['maxHitsType'] = int(data[104])
     entry['maxHits'] = int(data[105])
     entry['focusable'] = int(data[125]) != 1

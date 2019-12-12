@@ -95,7 +95,7 @@ class EffectsCategory
               // update charged map if needed
               if (slot.effect && slot.effect.maxHitsType === Utils.MaxHitsTypes.MATCHING)
               {
-                finalEffects.chargedSpellList.push(slot.effect);
+                finalEffects.chargedSpellList.push({ spell: slot.effect, remainingHits: slot.effect.maxHits });
               }
   
               finalEffects['spa' + spa] += value;

@@ -24,8 +24,6 @@ class Spell
   constructor(data)
   {
     Object.assign(this, data);
-    this.remainingHits = this.maxHits;
-    this.actualCastTime = this.castTime;
     this.duration = this.duration2;
   }
 
