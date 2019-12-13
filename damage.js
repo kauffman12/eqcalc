@@ -9,6 +9,8 @@ exports.MaxHitsTypes =
   OUTGOING: 4, MATCHING: 7
 }
 
+exports.TickLength = 6000;
+
 exports.roundAsDec32 = (value) => Math.round(+(value.toFixed(7)));
 
 exports.randomInRange = (x, y) => 
@@ -91,7 +93,7 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   total += spa483 + Math.trunc(finalEffects.spa462 / ticks) + Math.trunc(finalEffects.spa484 / ticks);
   total += exports.roundAsDec32(finalEffects.spa507 * effectiveDamage / 1000); // 1000 is correct
 
-  return { total: total, crit: crit, lucky: lucky };
+  return { amount: total, crit: crit, lucky: lucky };
 }
 
 exports.calculateSpellDamage = (playerLevel, wornSpellDamage, spell) =>
