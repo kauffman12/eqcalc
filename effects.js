@@ -7,7 +7,7 @@ class Effects
     // initialize
     let me = this;
     [ 'doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier', 'luckChance' ].forEach(prop => me[prop] = 0.0);
-    [ 124, 127, 128, 132, 286, 296, 297, 302, 303, 399, 413, 461, 462, 483, 484, 507 ].forEach(spa => me['spa' + spa] = 0);
+    [ 124, 127, 128, 132, 286, 296, 297, 302, 303, 389, 399, 413, 461, 462, 483, 484, 507 ].forEach(spa => me['spa' + spa] = 0);
     this.chargedSpellList = [];
   }
 }
@@ -27,7 +27,7 @@ class EffectsCategory
     return this.chargedSpellList;
   }
 
-  buildEffects(inTwincast)
+  buildEffects(spell, inTwincast)
   {
     let finalEffects = new Effects();
     this.categories.forEach(category =>
@@ -51,7 +51,7 @@ class EffectsCategory
               finalEffects.doTCritMultiplier += slot.base1;
               break;
     
-            case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: 
+            case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389: 
             case 399: case 413: case 461: case 462: case 483: case 484: case 507:
               if (!inTwincast || slot.spa !== 399)
               {
@@ -117,11 +117,14 @@ class EffectsCategory
     return finalEffects;
   }
 
-  addCategory(effectList, spell)
+  addCategory(effectList, spell, playerClass)
+  {
+    this.categories.push(this.buildCategory(effectList, spell, playerClass));
+  }
+
+  buildCategory(effectList, spell, playerClass)
   {
     let category = new Map();
-    this.categories.push(category);
-
     effectList.forEach(effect =>
     {
       this.processChecks = new LimitChecks();
@@ -155,7 +158,7 @@ class EffectsCategory
             break;
 
           // SPAs that follow the normal rules, may or may not support a range of values, and they do not support stacking
-          case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: 
+          case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389:
           case 399: case 413: case 461: case 462: case 483: case 484: case 507:
             // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
             this.processUpdates(category);
@@ -263,12 +266,12 @@ class EffectsCategory
               {
                 // needs to fail if any of the exclude checks match
                 this.processChecks.playerClass = this.processChecks.playerClass === false ? this.processChecks.playerClass : 
-                  ((Math.abs(slot.base1) & this.playerClass) !== this.playerClass);
+                  ((Math.abs(slot.base1) & playerClass) !== playerClass);
               }
               else
               {
                 // only include players that match the correct class
-                this.processChecks.playerClass = this.processChecks.playerClass || ((slot.base1 & this.playerClass) === this.playerClass);
+                this.processChecks.playerClass = this.processChecks.playerClass || ((slot.base1 & playerClass) === playerClass);
               }            
             break;
           case 414:
@@ -308,6 +311,8 @@ class EffectsCategory
       // process remaining
       this.processUpdates(category, true);
     });
+
+    return category;
   }
 
   processUpdates(category, complete = false)
@@ -358,7 +363,12 @@ class EffectsCategory
     }
 
     return updateNextValue;
-  }  
+  }
+
+  clear()
+  {
+    this.categories = [];
+  }
 }
 
 class LimitChecks

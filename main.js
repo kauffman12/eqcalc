@@ -12,6 +12,7 @@ class PlayerState
     this.baseNukeCritChance = 0;
     this.baseNukeCritMultiplier = 100;
     this.currentTime = 0;
+    this.resetLockouts = undefined;
     this.increaseBuffDuration = 2.0;
     this.lagTime = lagTime;
     this.level = level;
@@ -19,6 +20,7 @@ class PlayerState
     this.playerClass = playerClass;
     this.spellDB = new SpellDatabase(playerClass);
     this.spellDamage = spellDamage;
+    this.effectsBuilder = new EffectsCategory(this.spellDB);
 
     this.aaList = [];
     this.buffList = [];
@@ -44,8 +46,23 @@ class PlayerState
     let lockouts = [];
     let results = [];
     let actionLockTime = 0;
+
     while (this.currentTime <= endTime)
     {
+      if (this.resetLockouts)
+      {
+        lockouts = [];
+        actionLockTime = 0;
+
+        this.castQueue.forEach(item =>
+        {
+          let category = this.effectsBuilder.buildCategory([this.resetLockouts], item.spell, this.playerClass);
+          item.readyTime = (category.has(389)) ? this.currentTime : item.readyTime;
+        });
+
+        this.resetLockouts = undefined;
+      }
+
       if (actionLockTime <= this.currentTime)
       {
         let info = this.castQueue.find(info => info.readyTime <= this.currentTime && !lockouts.find(lock => lock.timerId === info.spell.timerId));
@@ -104,7 +121,7 @@ class PlayerState
         });
       }
       
-      this.buffList = this.buffList.filter(spell => spell.expireTime > this.currentTime);
+      this.buffList = this.buffList.filter(spell => (spell.frozen || spell.expireTime > this.currentTime));
       lockouts = lockouts.filter(lock => lock.unlockTime > this.currentTime);
     }
 
@@ -120,16 +137,28 @@ class PlayerState
     result.castTime = spell.castTime - Math.trunc(finalEffects.spa127 * spell.castTime / 100);
     this.updateSpellDuration(spell, finalEffects);
 
+    let handled340 = false;
     let handled469 = false;
     spell.slotList.forEach(slot =>
     {
       switch(slot.spa)
       {
+        case 340:
+            if (!handled340 && Math.random() * 100 <= slot.base1)
+            {
+              handled340 = this.addProc(result, this.spellDB.getSpell(slot.base2));
+            }          
+          break;
+
         case 374:
           if (Math.random() * 100 <= slot.base1)
           {
             this.addProc(result, this.spellDB.getSpell(slot.base2));
           }
+          break;
+
+        case 389:
+          this.resetLockouts = spell;
           break;
 
         case 469:
@@ -174,7 +203,12 @@ class PlayerState
     // charge spells
     this.charge(finalEffects.chargedSpellList);
 
-    if (needTwincast)
+    if (spell.recourseId)
+    {
+      this.addProc(result, this.spellDB.getSpell(spell.recourseId));
+    }
+
+    if (needTwincast && result.damage)
     {
       result.twincast = this.cast(spell, true).damage;
     }
@@ -231,12 +265,12 @@ class PlayerState
 
   buildEffects(spell, inTwincast)
   {  
-    let effectsBuilder = new EffectsCategory(this.spellDB);
-    effectsBuilder.addCategory(this.aaList, spell);
-    effectsBuilder.addCategory(this.buffList, spell);
-    effectsBuilder.addCategory(this.wornList, spell);
+    this.effectsBuilder.clear();
+    this.effectsBuilder.addCategory(this.aaList, spell, this.playerClass);
+    this.effectsBuilder.addCategory(this.buffList, spell, this.playerClass);
+    this.effectsBuilder.addCategory(this.wornList, spell, this.playerClass);
 
-    let finalEffects = effectsBuilder.buildEffects(inTwincast);
+    let finalEffects = this.effectsBuilder.buildEffects(spell, inTwincast);
     finalEffects.doTCritChance += this.baseDoTCritChance;
     finalEffects.doTCritMultiplier += this.baseDoTCritMultiplier;
     finalEffects.nukeCritChance += Damage.calculateBaseNukeCritChance(this.playerClass, this.baseNukeCritChance);
@@ -253,6 +287,11 @@ class PlayerState
     }
 
     return finalEffects;
+  }
+
+  freezeCurrentBuffs()
+  {
+    this.buffList.forEach(spell => spell.frozen = true);
   }
 
   addEffect(id, effect, list)
@@ -304,6 +343,7 @@ class DamageCounter
     this.runTime = runTime;
     this.max = 0;
     this.min = 0;
+    this.spellCounts = {};
     this.tcCount = 0;    
     this.totalDamage = 0;
   }
@@ -312,12 +352,12 @@ class DamageCounter
   {
     if (result.damage)
     {
-      this.countDamage(result.damage);
+      this.countDamage(result.name, result.damage);
     }
 
     if (result.twincast)
     {
-      this.countDamage(result.twincast);
+      this.countDamage(result.name, result.twincast, true);
     }
   
     if (result.procs)
@@ -326,15 +366,18 @@ class DamageCounter
     }
   }
 
-  countDamage(damage)
+  countDamage(name, damage, inTwincast = false)
   {
     this.count++;
     this.critCount += damage.crit ? 1 : 0;
     this.luckyCount += damage.lucky ? 1 : 0;
-    this.tcCount += damage.twincast ? 1 : 0;
-    this.totalDamage += damage.total;
-    this.max = Math.max(this.max, damage.total);
-    this.min = this.min ? Math.min(this.min, damage.total) : damage.total;    
+    this.tcCount += (damage.twincast || inTwincast) ? 1 : 0;
+    this.totalDamage += damage.amount;
+    this.max = Math.max(this.max, damage.amount);
+    this.min = this.min ? Math.min(this.min, damage.amount) : damage. amount;
+    
+    let update = this.spellCounts[name] || 0;
+    this.spellCounts[name] = update + 1;
   }
 
   printStats()
@@ -346,6 +389,7 @@ class DamageCounter
     console.debug("TC Rate: " + ((this.tcCount / this.count) * 100 * 2).toFixed(2));    
     console.debug("Total: " + this.totalDamage);
     console.debug("DPS: " + Math.round(this.totalDamage / (this.runTime * this.iterations)));
+    console.debug(this.spellCounts);
   }
 }
 
@@ -353,35 +397,51 @@ let testWizard =
 {
   getState: () =>
   {
-    let state = new PlayerState(Damage.Classes.WIZ, 110, 3000, 50, 100);
+    let state = new PlayerState(Damage.Classes.WIZ, 110, 2000, 0, 100);
   
     // static effects
     state.addAA(114, 35);      // Fury of Magic
-    state.addAA(397, 28);      // Destructive Fury
+    state.addAA(397, 36);      // Destructive Fury
     state.addAA(1292, 11);     // Skyblaze Focus
+    state.addAA(1291, 11);     // Rimeblast Focus
+    state.addAA(1033, 11);     // Flash Focus
+    state.addAA(1031, 11);     // Claw Focus
+    state.addAA(1034, 11);     // Cloudburst Focus
     state.addAA(44, 10);       // Quick Damage
     state.addAA(1263, 8);      // Destructive Adept
     state.addAA(850, 20);      // Sorc Vengeance
     state.addAA(476, 5);       // Keepers 5
+    state.addAA(1405, 5);      // Twincast 5%
+    state.addWorn(49694);      // Eyes of Life and Decay
+    state.addWorn(45815);      // TBL Raid Robe
+    state.addWorn(45949);      // TBL Raid Gloves
+    state.addWorn(45945);      // TBL Raid Helm
+    state.addWorn(45947);      // TBL Raid Arms
     state.addWorn(46666);      // Legs haste
     state.addWorn(57723);      // Skyfire Type 3
+    state.addWorn(57727);      // Cloudburst Type 3
+    state.addWorn(57724);      // Claw Type 3
   
     // cast queue
-    state.addToQueue(56897);   // Braid
-    //state.addToQueue(58149);   // dissident
+    state.addToQueue(56812);   // Claw of Qunard
+    //state.addToQueue(56897);   // Braid
+    state.addToQueue(56796);   // Cloudburst
     state.addToQueue(56872);   // skyfire
-    state.addToQueue(56848);   // icefloe
+
+    //state.addToQueue(58149);   // dissident
+    //state.addToQueue(56848);   // icefloe
     return state;
   },
   
   updateBuffs: (state) =>
   {
     state.addBuff(58579);     // Cleric Spell Haste
-    state.addBuff(51599);     // IOG
     state.addBuff(51502);     // Improved Familiar
-    state.addBuff(51090);     // Improved Twincast
-    //state.addBuff(18882);
-    //state.addWorn(9522);      // Fire 1 to 25% max level 75
+    //state.addBuff(18701);     // Twincast Aura rk3
+    //state.addBuff(51599);     // IOG
+    //state.addBuff(51090);     // Improved Twincast
+    //state.addBuff(18882);     // Twincast
+    state.freezeCurrentBuffs();
   }
 };
 
@@ -389,7 +449,7 @@ let testDruid =
 {
   getState: () =>
   {
-    let state = new PlayerState(Damage.Classes.DRU, 110, 3000, 50, 100);
+    let state = new PlayerState(Damage.Classes.DRU, 110, 3000, 0, 100);
   
     // static effects
     state.addAA(215, 30);      // Fury of Magic
@@ -404,7 +464,9 @@ let testDruid =
     state.addWorn(46657);      // 26% duration
   
     // cast queue
+    state.addToQueue(55882, 120);   // Sunray
     state.addToQueue(56029, 30);   // NBW rk2
+    state.addToQueue(55945);       // Roar
     return state;
   },
   
@@ -412,15 +474,15 @@ let testDruid =
   {
     state.addBuff(58579);     // Cleric Spell Haste
     state.addBuff(51599);     // IOG
-    state.addBuff(51090);     // Improved Twincast
+    //state.addBuff(51090);     // Improved Twincast
   }
 };
 
-let tester = testDruid;
+let tester = testWizard;
 let state = tester.getState();
 
 let tests = 1;
-let runTime = 70;
+let runTime = 500;
 let counter = new DamageCounter(runTime, tests);
 
 for (let i = 0; i < tests; i++)
@@ -428,12 +490,14 @@ for (let i = 0; i < tests; i++)
   // clear out any old buffs
   state.resetSpells();
 
-  // things that expire
+  // add back things that expire
   tester.updateBuffs(state);
 
   state.run(runTime).forEach(result =>
   {
-    console.log(Util.inspect(result, { compact: true, depth: 5, breakLength: 180, colors: true }));
+    //console.log(Util.inspect(result, { compact: true, depth: 5, breakLength: 180, colors: true }));
     counter.add(result);
   });
+
+  counter.printStats();
 }

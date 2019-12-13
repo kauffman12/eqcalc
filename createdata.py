@@ -8,7 +8,7 @@ IGNORE_LIST = [ 'Illusion: ', 'MRC - ', 'Reserved', 'RESERVED', 'SKU', 'N/A', 'N
 
 CLASSES = [ 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65535 ]
 
-FOCUS_SPAS = [ 170, 212, 273, 294, 375, 124, 127, 128, 129, 132, 286, 296, 297, 302, 303, 374, 399, 413, 461, 462, 469, 470, 483, 484, 507 ]
+FOCUS_SPAS = [ 170, 212, 273, 294, 375, 124, 127, 128, 129, 132, 286, 296, 297, 302, 303, 340, 374, 389, 399, 413, 461, 462, 469, 470, 483, 484, 507 ]
 
 
 dbStrings = dict()
@@ -76,6 +76,7 @@ if os.path.isfile(DBSpellsFile):
     entry['resist'] = int(data[31])
     entry['target'] = int(data[32])
     entry['skill'] = int(data[34])
+    entry['recourseId'] = int(data[83])
     entry['timerId'] = int(data[100])
     entry['maxHitsType'] = int(data[104])
     entry['maxHits'] = int(data[105])

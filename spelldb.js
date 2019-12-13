@@ -26,6 +26,7 @@ class Spell
     Object.assign(this, data);
     this.duration = this.duration2;
     this.expireTime = 0;
+    this.frozen = false;
     this.doTwincast = false;
     this.remainingHits = this.maxHits;
     this.ticks = 0;
