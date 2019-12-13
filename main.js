@@ -55,19 +55,19 @@ class PlayerState
       {
         let spell = info.spell;
         let result = this.cast(spell);
-        info.readyTime = this.currentTime + result.actualCastTime + spell.recastTime;
+        info.readyTime = this.currentTime + result.castTime + spell.recastTime;
 
         if (spell.timerId)
         {
           lockouts.push({ timerId: spell.timerId, unlockTime: info.readyTime });
         }
 
-        this.currentTime += result.actualCastTime + spell.lockoutTime + this.lagTime;
+        this.currentTime += result.castTime + spell.lockoutTime + this.lagTime;
 
         if (this.currentTime <= endTime)
         {
           result.cast = count;
-          result.time = this.currentTime;
+          result.hitTime = this.currentTime;
           results.push(result);
           count++;
         }
@@ -91,8 +91,7 @@ class PlayerState
 
     let result = { name: spell.name };
     result.duration = spell.duration + finalEffects.spa128;
-    result.actualCastTime = spell.castTime - Math.trunc(finalEffects.spa127 * spell.castTime / 100);
-
+    result.castTime = spell.castTime - Math.trunc(finalEffects.spa127 * spell.castTime / 100);
 
     let handled469 = false;
     spell.slotList.forEach(slot =>
@@ -127,11 +126,6 @@ class PlayerState
             // add damage for one hit / tick
             result.damage = Damage.calculateDamage(this.level, this.spellDamage, spell, baseDamage, this.luck, true, 1, finalEffects);
             result.damage.spa = slot.spa;
-
-            if (inTwincast)
-            {
-              result.damage.twincast = true;
-            }
           }
           else
           {
@@ -152,7 +146,7 @@ class PlayerState
 
     if (needTwincast)
     {
-      result.twincast = this.cast(spell, true);
+      result.twincast = this.cast(spell, true).damage;
     }
 
     return result;
@@ -274,7 +268,7 @@ class DamageCounter
 
     if (result.twincast)
     {
-      this.countDamage(result.twincast.damage);
+      this.countDamage(result.twincast);
     }
   
     if (result.procs)
@@ -345,9 +339,7 @@ for (let i = 0; i < tests; i++)
 
   state.run(runTime).forEach(result =>
   {
-    console.log(Util.inspect(result, false, null, true));
+    console.log(Util.inspect(result, { compact: true, depth: 5, breakLength: 180, colors: true }));
     counter.add(result);
   });
 }
-
-counter.printStats();
