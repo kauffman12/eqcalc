@@ -25,6 +25,8 @@ class Spell
   {
     Object.assign(this, data);
     this.duration = this.duration2;
+    this.expireTime = 0;
+    this.remainingHits = this.maxHits;
   }
 
   updateDuration(playerLevel)
@@ -135,7 +137,7 @@ class SpellDatabase
     }
   }
 
-  findSpaValue(spell, spa)
+  findSpaSlot(spell, spa)
   {
     let result = undefined;
 
@@ -145,13 +147,7 @@ class SpellDatabase
       
       if (slot.spa === spa)
       {
-        result = slot.base1;
-        break;
-      }
-      else if (slot.spa === 470)
-      {
-        let best = this.getBestSpellInGroup(slot.base2);
-        result = best ? this.findSpaValue(best, spa) : undefined;
+        result = slot;
         break;
       }
     }
@@ -159,68 +155,32 @@ class SpellDatabase
     return result;
   }
 
-  hasSpaWithMaxValue(spell, spa, value)
+  hasSpaWithMaxBase1(spell, spa, value)
   {
     let found = this.findSpaValue(spell, spa);
-    return found !== undefined && found >= value;
+    return found !== undefined && found.base1 >= value;
   }
 
-  hasSpaWithMinValue(spell, spa, value)
+  hasSpaWithMinBase1(spell, spa, value)
   {
     let found = this.findSpaValue(spell, spa);
-    return found !== undefined && found <= value;
+    return found !== undefined && found.base1 <= value;
   }  
 
   getAA(id, rank)
   {
-    let result = undefined;
     let key = id + '-' + rank;
-
-    if (this.cache.has(key))
-    {
-      result = this.cache.get(key);
-    }
-    else if (this.aas.get(key))
-    {
-      result = new AA(this.aas.get(key));
-      this.cache.set(key, result);
-    }
-
-    return result;
+    return this.aas.has(key) ? new AA(this.aas.get(key)) : undefined;
   }
 
   getSpell(id)
   {
-    let result = undefined;
-
-    if (this.cache.has(id))
-    {
-      result = this.cache.get(id);
-    }
-    else if (this.spells[id])
-    {
-      result = new Spell(this.spells[id]);
-      this.cache.set(id, result);
-    }
-
-    return result;
+    return this.spells[id] ? new Spell(this.spells[id]) : undefined;
   }
   
   getWorn(id)
   {
-    let result = undefined;
-
-    if (this.cache.has(id))
-    {
-      result = this.cache.get(id);
-    }
-    else if (this.spells[id])
-    {
-      result = new Worn(this.spells[id]);
-      this.cache.set(id, result);
-    }
-
-    return result;
+    return this.spells[id] ? new Worn(this.spells[id]) : undefined;
   }
 
   getBestSpellInGroup(id)

@@ -8,7 +8,7 @@ IGNORE_LIST = [ 'Illusion: ', 'MRC - ', 'Reserved', 'RESERVED', 'SKU', 'N/A', 'N
 
 CLASSES = [ 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65535 ]
 
-FOCUS_SPAS = [ 170, 212, 273, 294, 375, 124, 127, 128, 129, 132, 286, 296, 297, 302, 303, 374, 399, 413, 461, 462, 470, 483, 484, 507 ]
+FOCUS_SPAS = [ 170, 212, 273, 294, 375, 124, 127, 128, 129, 132, 286, 296, 297, 302, 303, 374, 399, 413, 461, 462, 469, 470, 483, 484, 507 ]
 
 
 dbStrings = dict()
@@ -112,7 +112,7 @@ if os.path.isfile(DBSpellsFile):
     if spellFocus and entry['level'] == 0:
       parsedSpells['spells'][entry['id']] = entry
 
-  with open('spells.json', 'w') as write_file:
+  with open('data/spells.json', 'w') as write_file:
     json.dump(parsedSpells, write_file)
     #json.dump(parsedSpells, write_file, sort_keys=True, indent=2)
 

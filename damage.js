@@ -4,7 +4,10 @@ exports.Classes =
   WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536
 }
 
-exports.MaxHitsTypes = { OUTGOING: 4, MATCHING: 7 }
+exports.MaxHitsTypes =
+{
+  OUTGOING: 4, MATCHING: 7
+}
 
 exports.roundAsDec32 = (value) => Math.round(+(value.toFixed(7)));
 
@@ -12,16 +15,16 @@ exports.randomInRange = (x, y) =>
 {
   let high = x > y ? x : y;
   let low = x < y ? x : y;
-
   return Math.floor(Math.random() * (high - low + 1)) + low;
 }
 
-exports.calculateBaseNukeCritChance = (baseNukeCritChance) =>
+exports.calculateBaseNukeCritChance = (playerClass, baseNukeCritChance) =>
 {
-  return baseNukeCritChance + (this.playerClass == exports.Classes.WIZ ? Math.ceil(Math.random() * 3.0) : 0);
+  // wizards have base crit chance between 1% and 3%
+  return baseNukeCritChance + (playerClass === exports.Classes.WIZ ? Math.ceil(Math.random() * 3.0) : 0);
 }
 
-exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, isNuke, ticks, finalEffects) =>
+exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck, isNuke, ticks, finalEffects) =>
 {
   // SPA 413 focuses base damage but is rounded differently for DoTs
   let spa413 = finalEffects.spa413 * baseDamage / 100;
@@ -65,7 +68,13 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, isNu
 
   // did the spell crit?
   let crit = (Math.random() * 100 <= (isNuke ? finalEffects.nukeCritChance : finalEffects.doTCritChance));
-  let critMultiplier = isNuke ? finalEffects.nukeCritMultiplier : finalEffects.doTCritMultiplier;
+  let lucky = crit && (Math.random() * 100 <= finalEffects.luckChance);
+
+  // add lucky crit multiplier?
+  let luckyCritMultiplier = lucky ? exports.randomInRange(5 * (Math.trunc(luck / 10) + 1), 5 * (Math.trunc(luck / 10) + 2)) : 0;
+
+  // calculate crit damage
+  let critMultiplier = luckyCritMultiplier + (isNuke ? finalEffects.nukeCritMultiplier : finalEffects.doTCritMultiplier);
   let critDamage = crit ? exports.roundAsDec32(beforeCritDamage * critMultiplier / 100) : 0;
 
   // get total so far
@@ -82,7 +91,7 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, isNu
   total += spa483 + Math.trunc(finalEffects.spa462 / ticks) + Math.trunc(finalEffects.spa484 / ticks);
   total += exports.roundAsDec32(finalEffects.spa507 * effectiveDamage / 1000); // 1000 is correct
 
-  return { total: total, crit: crit };
+  return { total: total, crit: crit, lucky: lucky };
 }
 
 exports.calculateSpellDamage = (playerLevel, wornSpellDamage, spell) =>

@@ -1,4 +1,4 @@
-const Utils = require('./utils.js');
+const Damage = require('./damage.js');
 
 class Effects
 {
@@ -6,9 +6,8 @@ class Effects
   {
     // initialize
     let me = this;
-    [ 'doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier' ].forEach(prop => me[prop] = 0.0);
+    [ 'doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier', 'luckChance' ].forEach(prop => me[prop] = 0.0);
     [ 124, 127, 128, 132, 286, 296, 297, 302, 303, 399, 413, 461, 462, 483, 484, 507 ].forEach(spa => me['spa' + spa] = 0);
-
     this.chargedSpellList = [];
   }
 }
@@ -28,7 +27,7 @@ class EffectsCategory
     return this.chargedSpellList;
   }
 
-  buildEffects()
+  buildEffects(inTwincast)
   {
     let finalEffects = new Effects();
     this.categories.forEach(category =>
@@ -54,56 +53,59 @@ class EffectsCategory
     
             case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: 
             case 399: case 413: case 461: case 462: case 483: case 484: case 507:
-              let value = 0;
-  
-              if (slot.base1 > 0)
+              if (!inTwincast || slot.spa !== 399)
               {
-                if (spa === 128)
+                let value = 0;
+  
+                if (slot.base1 > 0)
                 {
-                  value = spell.beneficial ? slot.base1 : Utils.randomInRange(slot.base2 || 1, slot.base1 || 1);                  
+                  if (spa === 128)
+                  {
+                    value = spell.beneficial ? slot.base1 : Damage.randomInRange(slot.base2 || 1, slot.base1 || 1);                  
+                  }
+                  else
+                  {
+                    value = (slot.base2 === 0 || slot.base1 === slot.base2) ? slot.base1 : Damage.randomInRange(slot.base2, slot.base1);
+                  }
                 }
                 else
                 {
-                  value = (slot.base2 === 0 || slot.base1 === slot.base2) ? slot.base1 : Utils.randomInRange(slot.base2, slot.base1);
+                  if (spa === 128)
+                  {
+                    value = slot.base2 === 0 ? slot.base1 : Damage.randomInRange(slot.base1, -1);
+                  }
+                  else
+                  {
+                    value = slot.base2 !== 0 ? slot.base1 : Damage.randomInRange(slot.base1, slot.base2);
+                  }
                 }
-              }
-              else
-              {
+    
+                if (slot.reduceBy > 0)
+                {
+                  value = Math.trunc(value * (1 - slot.reduceBy / 100));
+                  value = value < 0 ? 0 : value;
+                }
+  
+                // convert from percent to actual value
                 if (spa === 128)
                 {
-                  value = slot.base2 === 0 ? slot.base1 : Utils.randomInRange(slot.base1, -1);
+                  let calc = Math.trunc(spell.duration * value / 100);
+                  value = value > 0 ? Math.max(1, calc) : Math.min(-1, calc);
                 }
-                else
+  
+                // update charged map if needed
+                if (slot.effect && slot.effect.maxHitsType === Damage.MaxHitsTypes.MATCHING)
                 {
-                  value = slot.base2 !== 0 ? slot.base1 : Utils.randomInRange(slot.base1, slot.base2);
+                  finalEffects.chargedSpellList.push(slot.effect);
                 }
-              }
+    
+                finalEffects['spa' + spa] += value;
   
-              if (slot.reduceBy > 0)
-              {
-                value = Math.trunc(value * (1 - slot.reduceBy / 100));
-                value = value < 0 ? 0 : value;
-              }
-
-              // convert from percent to actual value
-              if (spa === 128)
-              {
-                let calc = Math.trunc(spell.duration * value / 100);
-                value = value > 0 ? Math.max(1, calc) : Math.min(-1, calc);
-              }
-
-              // update charged map if needed
-              if (slot.effect && slot.effect.maxHitsType === Utils.MaxHitsTypes.MATCHING)
-              {
-                finalEffects.chargedSpellList.push({ spell: slot.effect, remainingHits: slot.effect.maxHits });
-              }
-  
-              finalEffects['spa' + spa] += value;
-
-              // SPA 127 has a max value
-              if (spa === 127 && finalEffects['spa127'] > 50)
-              {
-                finalEffects['spa127'] = 50;
+                // SPA 127 has a max value
+                if (spa === 127 && finalEffects['spa127'] > 50)
+                {
+                  finalEffects['spa127'] = 50;
+                }
               }
 
               break;
@@ -193,12 +195,12 @@ class EffectsCategory
               // this SPA may appear multiple times
               // exclude spells with specified SPA            
               this.processChecks.currentHp = this.processChecks.currentHp === false ? this.processChecks.currentHp : 
-                this.spellDB.findSpaValue(spell, Math.abs(slot.base1)) === undefined;
+                this.spellDB.findSpaSlot(spell, Math.abs(slot.base1)) === undefined;
             }
             else
             {
               // only include spells with specified SPA
-              this.processChecks.currentHp = this.processChecks.currentHp || this.spellDB.findSpaValue(spell, Math.abs(slot.base1)) !== undefined;
+              this.processChecks.currentHp = this.processChecks.currentHp || this.spellDB.findSpaSlot(spell, Math.abs(slot.base1)) !== undefined;
             }
             break;
           case 138:
@@ -235,7 +237,7 @@ class EffectsCategory
             break;
           case 311:
             // exclude combat skills
-            this.processChecks.combatSkills = this.spellDB.findSpaValue(spell, 193) === undefined;
+            this.processChecks.combatSkills = this.spellDB.findSpaSlot(spell, 193) === undefined;
             break;
           case 348:
             this.processChecks.minMana = spell.manaCost >= slot.base1;
@@ -283,11 +285,11 @@ class EffectsCategory
             break;
           case 479:
             // only one check needs to pass
-            this.processChecks.maxValue = (this.processChecks.maxValue || this.spellDB.hasSpaWithMaxValue(spell, slot.base2, slot.base1));
+            this.processChecks.maxValue = (this.processChecks.maxValue || this.spellDB.hasSpaWithMaxBase1(spell, slot.base2, slot.base1));
             break;
           case 480:
             // only one check needs to pass
-            this.processChecks.minValue = (this.processChecks.minValue || this.spellDB.hasSpaWithMinValue(spell, slot.base2, slot.base1));
+            this.processChecks.minValue = (this.processChecks.minValue || this.spellDB.hasSpaWithMinBase1(spell, slot.base2, slot.base1));
             break;
           case 490:
             this.processChecks.minRecastTime = spell.recastTime >= slot.base1;
