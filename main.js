@@ -46,9 +46,11 @@ class PlayerState
     let lockouts = [];
     let results = [];
     let actionLockTime = 0;
+    let action = undefined;
 
     while (this.currentTime <= endTime)
     {
+      // reset was issued from cast
       if (this.resetLockouts)
       {
         lockouts = [];
@@ -56,7 +58,7 @@ class PlayerState
 
         this.castQueue.forEach(item =>
         {
-          let category = this.effectsBuilder.buildCategory([this.resetLockouts], item.spell, this.playerClass);
+          let category = this.effectsBuilder.buildCategory([this.resetLockouts], item.spell, this.playerClass, false);
           item.readyTime = (category.has(389)) ? this.currentTime : item.readyTime;
         });
 
@@ -65,63 +67,87 @@ class PlayerState
 
       if (actionLockTime <= this.currentTime)
       {
+        // expire buffs before running actions
+        this.buffList = this.buffList.filter(spell => (spell.frozen || spell.expireTime > this.currentTime));
+
         let info = this.castQueue.find(info => info.readyTime <= this.currentTime && !lockouts.find(lock => lock.timerId === info.spell.timerId));
 
         if (info)
         {
           let spell = info.spell;
-          let result = this.cast(spell);
-  
-          result.cast = count;
-          result.startTime = this.currentTime;
-          result.hitTime = this.currentTime + result.castTime;
-          actionLockTime = result.hitTime + spell.lockoutTime + this.lagTime;
-          info.readyTime = Math.max(this.currentTime + info.interval, this.currentTime + result.castTime + spell.recastTime);
-  
+          let preCastEffects = this.getEffects(spell);
+
+          action =
+          {
+            spell: spell,
+            castTime: spell.castTime - Math.trunc(preCastEffects.spa127 * spell.castTime / 100),
+            startTime: this.currentTime
+          };
+
+          action.hitTime = this.currentTime + action.castTime;
+          actionLockTime = action.hitTime + spell.lockoutTime + this.lagTime;
+          info.readyTime = Math.max(this.currentTime + info.interval, this.currentTime + action.castTime + spell.recastTime);
+
           if (spell.timerId)
           {
             lockouts.push({ timerId: spell.timerId, unlockTime: info.readyTime });
           }
-    
-          if (result.hitTime <= endTime)
-          {
-            results.push(result);
-            count++;
-          }
         }  
       }
 
-      this.currentTime += 200;
+      this.currentTime += 100;
 
-      if (this.currentTime % 6000 === 0)
+      if (action && this.currentTime >= action.hitTime)
       {
-        this.doTQueue = this.doTQueue.filter(spell => spell.expireTime >= this.currentTime);
+        // expire buffs before running actions but his the actual hitTime in this case
+        this.buffList = this.buffList.filter(spell => (spell.frozen || spell.expireTime > action.hitTime));
+
+        let result = this.cast(action.spell);
+        result.cast = count;
+        result.castTime = action.castTime;
+        result.hitTime = action.hitTime;
+        result.startTime = action.startTime;
+        results.push(result);
+        count++;
+        action = undefined;
+      }
+  
+      if (this.currentTime % Damage.TickLength === 0 && this.doTQueue.length > 0)
+      {
+        // expire buffs before running actions
+        this.buffList = this.buffList.filter(spell => (spell.frozen || spell.expireTime > this.currentTime));
+
+        this.doTQueue = this.doTQueue.filter(spell => spell.ticksRemaining > 0);
         this.doTQueue.forEach(spell =>
         {
           let slot = this.spellDB.findSpaSlot(spell, 0);
           if (spell.ticksRemaining > 0 && slot)
           {
-            // base damage can increase with time and needs to be calculated per tick
-            let baseDamage = Math.abs(Damage.calculateValue(slot.calc, slot.base1, slot.max, spell.ticksRemaining, this.level));
-
             // add damage for one hit / tick
             let result = { name: spell.name, hitTime: this.currentTime, tick: (spell.ticks - spell.ticksRemaining) + 1 };
-            result.damage = Damage.calculateDamage(this.level, this.spellDamage, spell, baseDamage, this.luck, false, spell.ticks, this.buildEffects(spell, true));
 
-            if (spell.doTwincast)
+            // ignore feedbacks
+            if (!spell.isSelfDamaging())
             {
-              result.damage.amount *= 2;
-              result.damage.twincast = true;
+              // base damage can increase with time and needs to be calculated per tick
+              let baseDamage = Math.abs(Damage.calculateValue(slot.calc, slot.base1, slot.max, spell.ticksRemaining, this.level));
+              result.damage = Damage.calculateDamage(this.level, this.spellDamage, spell, baseDamage, this.luck, false, spell.ticks, this.getEffects(spell));
+
+              if (spell.doTwincast)
+              {
+                result.damage.amount *= 2;
+                result.damage.twincast = true;
+              }
+
+              result.damage.spa = slot.spa;
             }
 
-            result.damage.spa = slot.spa;
             results.push(result);
             spell.ticksRemaining--;
           }
         });
       }
       
-      this.buffList = this.buffList.filter(spell => (spell.frozen || spell.expireTime > this.currentTime));
       lockouts = lockouts.filter(lock => lock.unlockTime > this.currentTime);
     }
 
@@ -130,11 +156,10 @@ class PlayerState
 
   cast(spell, inTwincast)
   {
-    let finalEffects = this.buildEffects(spell, inTwincast);
-    let needTwincast = finalEffects.spa399 !== undefined && Math.random() * 100 <= finalEffects.spa399;
+    let finalEffects = this.getEffects(spell, inTwincast);
+    let needTwincast = !inTwincast && finalEffects.spa399 > 0 && Math.random() * 100 <= finalEffects.spa399;
 
     let result = { name: spell.name };
-    result.castTime = spell.castTime - Math.trunc(finalEffects.spa127 * spell.castTime / 100);
     this.updateSpellDuration(spell, finalEffects);
 
     let handled340 = false;
@@ -174,7 +199,7 @@ class PlayerState
 
         case 0: case 79:
           // execute right away if it's a nuke
-          if ((spell.duration === 0 || slot.spa === 79))
+          if ((spell.duration === 0 || slot.spa === 79) && !spell.isSelfDamaging())
           {
             // base damage can increase with time and needs to be calculated per tick
             let baseDamage = Math.abs(Damage.calculateValue(slot.calc, slot.base1, slot.max, 1, this.level));
@@ -194,23 +219,29 @@ class PlayerState
       }
     });
 
+    // charge spells
+    this.charge(finalEffects.chargedSpellList);
+
+    // if spell has duration that add it to the buff list
     if (spell.duration > 0)
     {
       let found = this.buffList.find(buff => buff.id === spell.id) || spell;
       this.buffList.push(found);
     }
 
-    // charge spells
-    this.charge(finalEffects.chargedSpellList);
-
-    if (spell.recourseId)
+    // handle procs
+    finalEffects.spellProcs.forEach(proc =>
     {
-      this.addProc(result, this.spellDB.getSpell(spell.recourseId));
-    }
+      this.addProc(result, this.spellDB.getSpell(proc));
+    });
 
+    // recouse is done last before possible twincast
+    this.addProc(result, this.spellDB.getSpell(spell.recourseId));
+
+    // twincast if needed
     if (needTwincast && result.damage)
     {
-      result.twincast = this.cast(spell, true).damage;
+      result.twincast = this.cast(spell, true);
     }
 
     return result;
@@ -235,9 +266,9 @@ class PlayerState
     spell.updateDuration(this.level);
 
     let extended = spell.duration;
-    if (spell.beneficial === 1)
+    if (spell.beneficial)
     {
-      extended *= spell.focusable ? this.increaseBuffDuration : 1;
+      extended *= (spell.focusable !== 1) ? this.increaseBuffDuration : 1;
     }
     else if (finalEffects && finalEffects.spa128 > 0)
     {
@@ -245,7 +276,7 @@ class PlayerState
     }
 
     spell.ticks = spell.ticksRemaining = extended + 1;
-    spell.expireTime = this.currentTime + spell.ticks * Damage.TickLength;
+    spell.expireTime = this.currentTime + (extended * Damage.TickLength) + Damage.randomInRange(0, Damage.TickLength);
     spell.remainingHits = spell.maxHits;    
   }
 
@@ -263,12 +294,14 @@ class PlayerState
     });
   }
 
-  buildEffects(spell, inTwincast)
+  getEffects(spell, inTwincast = false)
   {  
     this.effectsBuilder.clear();
-    this.effectsBuilder.addCategory(this.aaList, spell, this.playerClass);
+
+    // cache worn and AAs since they don't change
+    this.effectsBuilder.addCategory(this.aaList, spell, this.playerClass, 'aaCacheId');
+    this.effectsBuilder.addCategory(this.wornList, spell, this.playerClass, 'wornCacheId');
     this.effectsBuilder.addCategory(this.buffList, spell, this.playerClass);
-    this.effectsBuilder.addCategory(this.wornList, spell, this.playerClass);
 
     let finalEffects = this.effectsBuilder.buildEffects(spell, inTwincast);
     finalEffects.doTCritChance += this.baseDoTCritChance;
@@ -334,30 +367,31 @@ class PlayerState
 
 class DamageCounter
 {
-  constructor(runTime = 0, iterations = 0)
+  constructor(iterations = 0)
   {
     this.count = 0;
     this.critCount = 0;
     this.luckyCount = 0;
     this.iterations = iterations;
-    this.runTime = runTime;
     this.max = 0;
     this.min = 0;
     this.spellCounts = {};
     this.tcCount = 0;    
     this.totalDamage = 0;
+    this.lastTime = 0;
   }
 
-  add(result)
+  add(result, inTwincast = false)
   {
     if (result.damage)
     {
-      this.countDamage(result.name, result.damage);
+      this.countDamage(result.name, result.damage, inTwincast);
+      this.lastTime = result.hitTime || this.lastTime;
     }
 
     if (result.twincast)
     {
-      this.countDamage(result.name, result.twincast, true);
+      this.add(result.twincast, true);
     }
   
     if (result.procs)
@@ -388,8 +422,30 @@ class DamageCounter
     console.debug("Lucky Rate: " + ((this.luckyCount / this.count) * 100).toFixed(2));
     console.debug("TC Rate: " + ((this.tcCount / this.count) * 100 * 2).toFixed(2));    
     console.debug("Total: " + this.totalDamage);
-    console.debug("DPS: " + Math.round(this.totalDamage / (this.runTime * this.iterations)));
+    console.debug("DPS: " + Math.round(this.totalDamage / (this.lastTime / 1000 * this.iterations)));
     console.debug(this.spellCounts);
+  }
+}
+
+let testMage =
+{
+  getState: () =>
+  {
+    let state = new PlayerState(Damage.Classes.MAG, 115, 2000, 0, 100);
+    state.addAA(44, 10);       // Quick Damage
+    state.addAA(1664, 9);
+    state.addWorn(46666);      // Legs haste
+
+    state.addToQueue(60293);
+    state.addToQueue(60308);
+    state.addToQueue(57046);
+    return state;
+  },
+
+  updateBuffs: (state) =>
+  {
+    state.addBuff(58579);     // Cleric Spell Haste
+    state.freezeCurrentBuffs();
   }
 }
 
@@ -397,7 +453,7 @@ let testWizard =
 {
   getState: () =>
   {
-    let state = new PlayerState(Damage.Classes.WIZ, 110, 2000, 0, 100);
+    let state = new PlayerState(Damage.Classes.WIZ, 110, 2500, 0, 100);
   
     // static effects
     state.addAA(114, 35);      // Fury of Magic
@@ -407,11 +463,14 @@ let testWizard =
     state.addAA(1033, 11);     // Flash Focus
     state.addAA(1031, 11);     // Claw Focus
     state.addAA(1034, 11);     // Cloudburst Focus
+    state.addAA(1294, 10);     // Vortex Focus
     state.addAA(44, 10);       // Quick Damage
     state.addAA(1263, 8);      // Destructive Adept
     state.addAA(850, 20);      // Sorc Vengeance
     state.addAA(476, 5);       // Keepers 5
     state.addAA(1405, 5);      // Twincast 5%
+    state.addAA(1664, 8);      // Twinproc
+    state.addAA(1264, 3);      // Arcane Fusion
     state.addWorn(49694);      // Eyes of Life and Decay
     state.addWorn(45815);      // TBL Raid Robe
     state.addWorn(45949);      // TBL Raid Gloves
@@ -421,10 +480,13 @@ let testWizard =
     state.addWorn(57723);      // Skyfire Type 3
     state.addWorn(57727);      // Cloudburst Type 3
     state.addWorn(57724);      // Claw Type 3
+    //state.addWorn(24417);      // TBM belt
+    state.addWorn(50833);      // Threads Belt
   
     // cast queue
+    state.addToQueue(58164);   // Stormjolt
     state.addToQueue(56812);   // Claw of Qunard
-    //state.addToQueue(56897);   // Braid
+    state.addToQueue(56897);   // Braid
     state.addToQueue(56796);   // Cloudburst
     state.addToQueue(56872);   // skyfire
 
@@ -437,6 +499,7 @@ let testWizard =
   {
     state.addBuff(58579);     // Cleric Spell Haste
     state.addBuff(51502);     // Improved Familiar
+    state.addBuff(49353);     // Dragonmagic Potion
     //state.addBuff(18701);     // Twincast Aura rk3
     //state.addBuff(51599);     // IOG
     //state.addBuff(51090);     // Improved Twincast
@@ -475,15 +538,62 @@ let testDruid =
     state.addBuff(58579);     // Cleric Spell Haste
     state.addBuff(51599);     // IOG
     //state.addBuff(51090);     // Improved Twincast
+    state.freezeCurrentBuffs();
+  }
+};
+
+let testBard =
+{
+  getState: () =>
+  {
+    let state = new PlayerState(Damage.Classes.BRD, 115, 0, 0, 100);
+  
+    // static effects
+    //state.addAA(358, 21);      // Fury of Magic
+    //state.addAA(259, 12);      // Critical Afflication
+    //state.addAA(1022, 27);     // Destructive Fury
+    //state.addAA(942, 28);      // Destructive Cascade
+    //state.addAA(2162, 45);     // Improved Chants
+    //state.addAA(1254, 6);      // Twinsong
+
+    //state.addWorn(46985);      // Restless Focus
+    //state.addWorn(21238);      // TBL Group Gloves
+    //state.addWorn(21188);      // TBL Group Helm
+    //state.addWorn(21138);      // TBL Group Arms
+    //state.addWorn(45953);      // TBL Raid Range
+    //state.addWorn(46666);      // Legs haste
+
+    // cast queue
+    //state.addToQueue(59587, 20);   // Sontalak's Chant
+    //state.addToQueue(59528, 20);   // Malvus's Chant
+    //state.addToQueue(59501, 20);   // Yelinak's Chant
+    //state.addToQueue(59479, 20);   // Zlexak's Chant
+    state.addToQueue(56151, 20);    // Hoshkar's Chant
+
+    return state;
+  },
+  
+  updateBuffs: (state) =>
+  {
+    //state.addBuff(6271);      // Vesagran
+    //state.addBuff(41287);     // Auspice
+    //state.addBuff(52268);     // Glyph
+    //state.addBuff(37139);     // Fierce Eye
+    //state.addBuff(38189);     // IOG
+    state.addBuff(58579);     // Cleric Spell Haste
+    //state.addBuff(52211);     // Season's Wrath
+    state.addBuff(59464);       // Aria rk2
+    //state.addBuff(59281);     // Erupting Sunray
+    //state.freezeCurrentBuffs();
   }
 };
 
 let tester = testWizard;
 let state = tester.getState();
 
-let tests = 1;
-let runTime = 500;
-let counter = new DamageCounter(runTime, tests);
+let tests = 1000;
+let runTime = 300;
+let counter = new DamageCounter(tests);
 
 for (let i = 0; i < tests; i++)
 {
@@ -498,6 +608,6 @@ for (let i = 0; i < tests; i++)
     //console.log(Util.inspect(result, { compact: true, depth: 5, breakLength: 180, colors: true }));
     counter.add(result);
   });
-
-  counter.printStats();
 }
+
+counter.printStats();

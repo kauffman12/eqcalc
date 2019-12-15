@@ -69,7 +69,8 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   beforeCritDamage += spa296 + finalEffects.spa297 + Math.trunc(finalEffects.spa303 / ticks);    
 
   // did the spell crit?
-  let crit = (Math.random() * 100 <= (isNuke ? finalEffects.nukeCritChance : finalEffects.doTCritChance));
+  let critChance = spell.fixedCritChance >= 0 ? spell.fixedCritChance : (isNuke ? finalEffects.nukeCritChance : finalEffects.doTCritChance);
+  let crit = Math.random() * 100 <= critChance;
   let lucky = crit && (Math.random() * 100 <= finalEffects.luckChance);
 
   // add lucky crit multiplier?
@@ -102,22 +103,27 @@ exports.calculateSpellDamage = (playerLevel, wornSpellDamage, spell) =>
 
   if ((playerLevel - spell.level) < 10)
   {
-    let multiplier = 0.2499;
     let totalCastTime = spell.castTime + ((spell.recastTime > spell.lockoutTime) ? spell.recastTime : spell.lockoutTime);
-
-    if (totalCastTime >= 2500 && totalCastTime <= 7000)
-    {
-      multiplier = .000167 * (totalCastTime - 1000);
-    }
-    else if(totalCastTime > 7000)
-    {
-      multiplier = totalCastTime / 7000;
-    }
-
-    spellDamage = wornSpellDamage * multiplier;
+    spellDamage = wornSpellDamage * exports.calculateScalingMultiplier(totalCastTime);
   }
 
   return spellDamage;
+}
+
+exports.calculateScalingMultiplier = (castTime) =>
+{
+  let multiplier = 0.2499;
+
+  if (castTime >= 2500 && castTime <= 7000)
+  {
+    multiplier = .000167 * (castTime - 1000);
+  }
+  else if(castTime > 7000)
+  {
+    multiplier = castTime / 7000;
+  }
+
+  return multiplier;
 }
 
 exports.calculateValue = (calc, base1, max, tick, playerLevel) =>

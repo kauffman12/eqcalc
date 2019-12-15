@@ -1,3 +1,5 @@
+const Targets = { SELF: 6 }
+
 class AA
 {
   constructor(data)
@@ -31,6 +33,11 @@ class Spell
     this.remainingHits = this.maxHits;
     this.ticks = 0;
     this.ticksRemaining = 0;
+  }
+
+  isSelfDamaging()
+  {
+    return (!this.beneficial && this.target === Targets.SELF);
   }
 
   updateDuration(playerLevel)
@@ -161,13 +168,13 @@ class SpellDatabase
 
   hasSpaWithMaxBase1(spell, spa, value)
   {
-    let found = this.findSpaValue(spell, spa);
+    let found = this.findSpaSlot(spell, spa);
     return found !== undefined && found.base1 >= value;
   }
 
   hasSpaWithMinBase1(spell, spa, value)
   {
-    let found = this.findSpaValue(spell, spa);
+    let found = this.findSpaSlot(spell, spa);
     return found !== undefined && found.base1 <= value;
   }  
 

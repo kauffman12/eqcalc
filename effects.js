@@ -9,6 +9,7 @@ class Effects
     [ 'doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier', 'luckChance' ].forEach(prop => me[prop] = 0.0);
     [ 124, 127, 128, 132, 286, 296, 297, 302, 303, 389, 399, 413, 461, 462, 483, 484, 507 ].forEach(spa => me['spa' + spa] = 0);
     this.chargedSpellList = [];
+    this.spellProcs = [];
   }
 }
 
@@ -18,6 +19,7 @@ class EffectsCategory
   {
     this.spellDB = spellDB;
     this.categories = [];
+    this.categoryCache = new Map();
     this.processChecks = null;
     this.processList = null;
   }
@@ -27,7 +29,7 @@ class EffectsCategory
     return this.chargedSpellList;
   }
 
-  buildEffects(spell, inTwincast)
+  buildEffects(spell, inTwincast = false)
   {
     let finalEffects = new Effects();
     this.categories.forEach(category =>
@@ -47,13 +49,26 @@ class EffectsCategory
             case 212: case 294:
               finalEffects.nukeCritChance += slot.base1;
               break;
+            case 339:             
+              if ((!inTwincast || !category.has(497)) && Math.random() * 100 <= slot.base1)
+              {
+                finalEffects.spellProcs.push(slot.base2);
+              }
+              break;
             case 375:
               finalEffects.doTCritMultiplier += slot.base1;
+              break;
+            case 383:
+              if (Math.random() <= Damage.calculateScalingMultiplier(spell.castTime))
+              {
+                finalEffects.spellProcs.push(slot.base2);
+              }              
               break;
     
             case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389: 
             case 399: case 413: case 461: case 462: case 483: case 484: case 507:
-              if (!inTwincast || slot.spa !== 399)
+              // bards don't seem to benefit from SPA 124
+              if (slot.spa !== 124 || !spell.songCap)
               {
                 let value = 0;
   
@@ -117,9 +132,22 @@ class EffectsCategory
     return finalEffects;
   }
 
-  addCategory(effectList, spell, playerClass)
+  addCategory(effectList, spell, playerClass, cacheId)
   {
-    this.categories.push(this.buildCategory(effectList, spell, playerClass));
+    if (cacheId && this.categoryCache.has(cacheId + spell.id))
+    {
+      this.categories.push(this.categoryCache.get(cacheId + spell.id));
+    }
+    else
+    {
+      let category = this.buildCategory(effectList, spell, playerClass);
+      this.categories.push(category);
+
+      if (cacheId)
+      {
+        this.categoryCache.set(cacheId + spell.id, category);
+      }
+    }
   }
 
   buildCategory(effectList, spell, playerClass)
@@ -139,29 +167,21 @@ class EffectsCategory
             break;
          
           // unhandled limit checks
-          case 403: case 404: case 412: case 415: case 422: case 423: case 460: case 486: case 492: case 493: case 497: case 511:
+          case 412: case 415: case 422: case 423: case 486: case 492: case 493:
             console.debug('unhandled limit check ' + slot.spa);
             this.processChecks.unknown = true; // let it pass for now
             break;
 
           // Crit Damage Modifiers don't follow limit checks, do not require spells to be focusable, and stack
-          case 170: case 273:
+          case 170: case 273: case 294: case 375:
             this.updateCategory(category, slot);
             break;
 
-          // Crit Rate Modifiers that don't follow limit checks, do require spells be focusable, and stack
-          case 294: case 375:
-            if (spell.focusable)
-            {
-              this.updateCategory(category, slot);
-            }
-            break;
-
           // SPAs that follow the normal rules, may or may not support a range of values, and they do not support stacking
-          case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389:
+          case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 339: case 383: case 389:
           case 399: case 413: case 461: case 462: case 483: case 484: case 507:
             // before going on to a non-limit check, check if previous had passed and start over to handle multiple sections in one spell
-            this.processUpdates(category);
+            this.debugFailure(this.processUpdates(category), spell, effect);
             this.processList.push({ spa: slot.spa, base1: slot.base1, base2: slot.base2, spell: spell, effect: effect }); // copy values
             break;
 
@@ -261,6 +281,31 @@ class EffectsCategory
           case 391:
             this.processChecks.maxMana = spell.manaCost <= slot.base1;
             break;
+          case 403:
+              if (slot.base1 < 0)
+              {
+                // needs to fail if any of the exclude checks match
+                this.processChecks.spellClass = this.processChecks.spellClass === false ? this.processChecks.spellClass : spell.spellClass !== Math.abs(slot.base1);
+              }
+              else
+              {
+                // only include spells with specified id
+                this.processChecks.spellClass = this.processChecks.spellClass || spell.spellClass === Math.abs(slot.base1);
+              }            
+            break;            
+          case 404:
+              if (slot.base1 < 0)
+              {
+                // needs to fail if any of the exclude checks match
+                this.processChecks.spellSubclass = this.processChecks.spellSubclass === false ? this.processChecks.spellSubclass 
+                  : spell.spellSubclass !== Math.abs(slot.base1);
+              }
+              else
+              {
+                // only include spells with specified id
+                this.processChecks.spellSubclass = this.processChecks.spellSubclass || spell.spellSubclass === Math.abs(slot.base1);
+              }            
+            break;
           case 411: case 485:
               if (slot.base1 < 0)
               {
@@ -286,6 +331,9 @@ class EffectsCategory
                 this.processChecks.spellSkill = this.processChecks.spellSkill || spell.skill === Math.abs(slot.base1);
               }
             break;
+          case 460:
+            this.processChecks.includeNonFocusable = spell.focusable === 1;
+            break;
           case 479:
             // only one check needs to pass
             this.processChecks.maxValue = (this.processChecks.maxValue || this.spellDB.hasSpaWithMaxBase1(spell, slot.base2, slot.base1));
@@ -294,7 +342,7 @@ class EffectsCategory
             // only one check needs to pass
             this.processChecks.minValue = (this.processChecks.minValue || this.spellDB.hasSpaWithMinBase1(spell, slot.base2, slot.base1));
             break;
-          case 490:
+          case 490: case 511: // not sure if 511 follows this
             this.processChecks.minRecastTime = spell.recastTime >= slot.base1;
             break;     
           case 491:
@@ -303,13 +351,16 @@ class EffectsCategory
           case 495:
             this.processChecks.maxDuration = spell.duration <= slot.base1;
             break;
+          case 497:
+            this.updateCategory(category, slot);
+            break;
           default:
-            this.processUpdates(category);
+            this.debugFailure(this.processUpdates(category), spell, effect);
         }
       });
   
       // process remaining
-      this.processUpdates(category, true);
+      this.debugFailure(this.processUpdates(category, true), spell, effect);
     });
 
     return category;
@@ -317,6 +368,8 @@ class EffectsCategory
 
   processUpdates(category, complete = false)
   {
+    let failure = undefined;
+
     let hasLimits = this.processChecks.hasLimitsToCheck();
     if (this.processList.length > 0 && (hasLimits || complete))
     {
@@ -324,7 +377,7 @@ class EffectsCategory
       {
         this.processList.forEach(slot => 
         {
-          if (slot.spell.focusable)
+          if (this.processChecks.includeNonFocusable || slot.spell.focusable !== 1)
           {
             this.updateCategory(category, slot, false);
           }
@@ -336,10 +389,13 @@ class EffectsCategory
       else if (hasLimits)
       {
         // limits failed so start over
+        failure = this.processChecks;
         this.processChecks = new LimitChecks();
         this.processList = [];
       }
     }
+
+    return failure;
   }  
 
   updateCategory(category, next, stackable = true)
@@ -368,6 +424,15 @@ class EffectsCategory
   clear()
   {
     this.categories = [];
+  }
+
+  debugFailure(failure, spell, effect)
+  {
+    if (failure)
+    {
+      //console.debug(spell.name + " failed on " + effect.name);
+      //console.debug(failure);
+    }
   }
 }
 

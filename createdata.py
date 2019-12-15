@@ -8,7 +8,7 @@ IGNORE_LIST = [ 'Illusion: ', 'MRC - ', 'Reserved', 'RESERVED', 'SKU', 'N/A', 'N
 
 CLASSES = [ 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65535 ]
 
-FOCUS_SPAS = [ 170, 212, 273, 294, 375, 124, 127, 128, 129, 132, 286, 296, 297, 302, 303, 340, 374, 389, 399, 413, 461, 462, 469, 470, 483, 484, 507 ]
+FOCUS_SPAS = [ 170, 212, 273, 294, 375, 124, 127, 128, 129, 132, 286, 296, 297, 302, 303, 340, 374, 383, 389, 399, 413, 461, 462, 469, 470, 483, 484, 507 ]
 
 
 dbStrings = dict()
@@ -52,7 +52,7 @@ if os.path.isfile(DBSpellsFile):
       continue
 
     classMask = 0
-    spellLevel = 0
+    spellLevel = 255
     keepClass = False
     for i in range(38, 38+16):
       level = int(data[i])
@@ -80,9 +80,12 @@ if os.path.isfile(DBSpellsFile):
     entry['timerId'] = int(data[100])
     entry['maxHitsType'] = int(data[104])
     entry['maxHits'] = int(data[105])
-    entry['focusable'] = int(data[125]) != 1
+    entry['focusable'] = int(data[125])
+    entry['songCap'] = int(data[130])
     entry['group'] = int(data[135])
-    entry['fixedCritChance'] = int(data[145])
+    entry['fixedCritChance'] = int(data[144])
+    entry['spellClass'] = int(data[148])
+    entry['spellSubclass'] = int(data[149])
 
     spellFocus = False
     doesDamage = False
@@ -104,13 +107,13 @@ if os.path.isfile(DBSpellsFile):
       slotList.append(slots)
     entry['slotList'] = slotList
 
-    if (doesDamage or spellFocus) and entry['level'] > 0:
+    if (doesDamage or spellFocus) and entry['level'] < 255:
       for c in CLASSES:
         if (entry['classMask'] & c) == c:
           parsedSpells['spells'][entry['id']] = entry
           parsedSpells['index'][c].append(entry['id'])
 
-    if spellFocus and entry['level'] == 0:
+    if (doesDamage or spellFocus) and entry['level'] == 255:
       parsedSpells['spells'][entry['id']] = entry
 
   with open('data/spells.json', 'w') as write_file:
