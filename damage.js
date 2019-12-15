@@ -1,19 +1,12 @@
-exports.Classes =
-{
-  WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512,  SHM: 1024, NEC: 2048,
-  WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536
-}
+exports.Classes = { WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512, SHM: 1024, NEC: 2048, WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536 }
 
-exports.MaxHitsTypes =
-{
-  OUTGOING: 4, MATCHING: 7
-}
+exports.MaxHitsTypes = { OUTGOING: 4, MATCHING: 7 }
 
 exports.TickLength = 6000;
 
 exports.roundAsDec32 = (value) => Math.round(+(value.toFixed(7)));
 
-exports.randomInRange = (x, y) => 
+exports.randomInRange = (x, y) =>
 {
   let high = x > y ? x : y;
   let low = x < y ? x : y;
@@ -41,7 +34,7 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   if (isNuke)
   {
     // spell damage will only crit for a Nuke
-    beforeCritDamage += Math.trunc(exports.calculateSpellDamage(playerLevel, baseDamage, wornSpellDamage, spell)); 
+    beforeCritDamage += Math.trunc(exports.calculateSpellDamage(playerLevel, baseDamage, wornSpellDamage, spell));
 
     // SPA 302 will crit for a Nuke
     beforeCritDamage += Math.trunc(effectiveDamage * finalEffects.spa302 / 100);
@@ -66,7 +59,7 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   spa296 *= (finalEffects.spa297 > 0) ? 2 : 1;
 
   // SPA 296, 297, and 303 all crit as well
-  beforeCritDamage += spa296 + finalEffects.spa297 + Math.trunc(finalEffects.spa303 / ticks);    
+  beforeCritDamage += spa296 + finalEffects.spa297 + Math.trunc(finalEffects.spa303 / ticks);
 
   // did the spell crit?
   let critChance = spell.fixedCritChance >= 0 ? spell.fixedCritChance : (isNuke ? finalEffects.nukeCritChance : finalEffects.doTCritChance);
@@ -118,7 +111,7 @@ exports.calculateScalingMultiplier = (castTime) =>
   {
     multiplier = .000167 * (castTime - 1000);
   }
-  else if(castTime > 7000)
+  else if (castTime > 7000)
   {
     multiplier = castTime / 7000;
   }

@@ -63,7 +63,7 @@ class PlayerState
           {
             let category = this.effectsBuilder.buildCategory([resetSpell], item.spell, this.playerClass, false);
             item.readyTime = (category.has(389)) ? this.currentTime : item.readyTime;
-          });    
+          });
         }
 
         this.resetLockouts = undefined;
@@ -81,13 +81,10 @@ class PlayerState
           let spell = info.spell;
           let preCastEffects = this.getEffects(spell);
 
-          action =
-          {
-            spell: spell,
-            castTime: spell.castTime - Math.trunc(preCastEffects.spa127 * spell.castTime / 100),
-            startTime: this.currentTime
-          };
-
+          action = {};
+          action.spell = spell;
+          action.castTime = spell.castTime - Math.trunc(preCastEffects.spa127 * spell.castTime / 100),
+          action.startTime = this.currentTime;
           action.hitTime = this.currentTime + action.castTime;
           actionLockTime = action.hitTime + spell.lockoutTime + this.lagTime;
           info.readyTime = Math.max(this.currentTime + info.interval, this.currentTime + action.castTime + spell.recastTime);
@@ -96,7 +93,7 @@ class PlayerState
           {
             lockouts.push({ timerId: spell.timerId, unlockTime: info.readyTime });
           }
-        }  
+        }
       }
 
       this.currentTime += 100;
@@ -115,7 +112,7 @@ class PlayerState
         count++;
         action = undefined;
       }
-  
+
       if (this.currentTime % Damage.TickLength === 0 && this.doTQueue.length > 0)
       {
         // expire buffs before running actions
@@ -151,7 +148,7 @@ class PlayerState
           }
         });
       }
-      
+
       lockouts = lockouts.filter(lock => lock.unlockTime > this.currentTime);
     }
 
@@ -170,7 +167,7 @@ class PlayerState
 
     finalEffects.spellProcs.forEach(slot =>
     {
-      switch(slot.spa)
+      switch (slot.spa)
       {
         case 0: case 79:
           // execute right away if it's a nuke
@@ -192,12 +189,12 @@ class PlayerState
           break;
 
         case 339: case 340: case 374: case 383:
-          this.addProc(result, this.spellDB.getSpell(slot.base2), slot.base2);       
+          this.addProc(result, this.spellDB.getSpell(slot.base2), slot.base2);
           break;
 
         case 469: case 470:
           this.addProc(result, this.spellDB.getBestSpellInGroup(slot.base2), slot.base2);
-          break;    
+          break;
       }
     });
 
@@ -256,7 +253,7 @@ class PlayerState
 
     spell.ticks = spell.ticksRemaining = extended + 1;
     spell.expireTime = this.currentTime + (extended * Damage.TickLength) + Damage.randomInRange(0, Damage.TickLength);
-    spell.remainingHits = spell.maxHits;    
+    spell.remainingHits = spell.maxHits;
   }
 
   charge(chargedSpellList)
@@ -274,7 +271,7 @@ class PlayerState
   }
 
   getEffects(spell, inTwincast = false)
-  {  
+  {
     this.effectsBuilder.clear();
 
     // cache worn and AAs since they don't change
@@ -355,7 +352,7 @@ class DamageCounter
     this.max = 0;
     this.min = 0;
     this.spellCounts = {};
-    this.tcCount = 0;    
+    this.tcCount = 0;
     this.totalDamage = 0;
     this.lastTime = 0;
   }
@@ -372,7 +369,7 @@ class DamageCounter
     {
       this.add(result.twincast, true);
     }
-  
+
     if (result.procs)
     {
       result.procs.forEach(proc => this.add(proc));
@@ -387,8 +384,8 @@ class DamageCounter
     this.tcCount += (damage.twincast || inTwincast) ? 1 : 0;
     this.totalDamage += damage.amount;
     this.max = Math.max(this.max, damage.amount);
-    this.min = this.min ? Math.min(this.min, damage.amount) : damage. amount;
-    
+    this.min = this.min ? Math.min(this.min, damage.amount) : damage.amount;
+
     let update = this.spellCounts[name] || 0;
     this.spellCounts[name] = update + 1;
   }
@@ -399,7 +396,7 @@ class DamageCounter
     console.debug("Min: " + this.min);
     console.debug("Crit Rate: " + ((this.critCount / this.count) * 100).toFixed(2));
     console.debug("Lucky Rate: " + ((this.luckyCount / this.count) * 100).toFixed(2));
-    console.debug("TC Rate: " + ((this.tcCount / this.count) * 100 * 2).toFixed(2));    
+    console.debug("TC Rate: " + ((this.tcCount / this.count) * 100 * 2).toFixed(2));
     console.debug("Total: " + this.totalDamage);
     console.debug("DPS: " + Math.round(this.totalDamage / (this.lastTime / 1000 * this.iterations)));
     console.debug(this.spellCounts);
@@ -433,7 +430,7 @@ let testWizard =
   getState: () =>
   {
     let state = new PlayerState(Damage.Classes.WIZ, 110, 2349, 0, 100);
-  
+
     // static effects
     state.addAA(114, 35);      // Fury of Magic
     state.addAA(397, 36);      // Destructive Fury
@@ -461,7 +458,7 @@ let testWizard =
     state.addWorn(57724);      // Claw Type 3
     //state.addWorn(24417);      // TBM belt
     state.addWorn(50833);      // Threads Belt
-  
+
     // cast queue
     //state.addToQueue(58164);   // Stormjolt
     state.addToQueue(56812);   // Claw of Qunard
@@ -474,7 +471,7 @@ let testWizard =
     //state.addToQueue(56848);   // icefloe
     return state;
   },
-  
+
   updateBuffs: (state) =>
   {
     state.addBuff(58579);     // Cleric Spell Haste
@@ -493,7 +490,7 @@ let testDruid =
   getState: () =>
   {
     let state = new PlayerState(Damage.Classes.DRU, 110, 3000, 0, 100);
-  
+
     // static effects
     state.addAA(215, 30);      // Fury of Magic
     state.addAA(526, 27);      // Critical Afflication
@@ -505,14 +502,14 @@ let testDruid =
     state.addWorn(46666);      // Legs haste
     state.addWorn(57663);      // NBW Type 3
     state.addWorn(46657);      // 26% duration
-  
+
     // cast queue
     state.addToQueue(55882, 120);   // Sunray
     state.addToQueue(56029, 30);   // NBW rk2
     state.addToQueue(55945);       // Roar
     return state;
   },
-  
+
   updateBuffs: (state) =>
   {
     state.addBuff(58579);     // Cleric Spell Haste
@@ -527,7 +524,7 @@ let testBard =
   getState: () =>
   {
     let state = new PlayerState(Damage.Classes.BRD, 115, 0, 0, 100);
-  
+
     // static effects
     //state.addAA(358, 21);      // Fury of Magic
     //state.addAA(259, 12);      // Critical Afflication
@@ -552,7 +549,7 @@ let testBard =
 
     return state;
   },
-  
+
   updateBuffs: (state) =>
   {
     //state.addBuff(6271);      // Vesagran

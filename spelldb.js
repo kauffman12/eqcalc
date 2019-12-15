@@ -54,7 +54,7 @@ class Spell
       case 2:
         value = Math.trunc(playerLevel / 2) + 5;
         value = value < 6 ? 6 : value;
-          break;
+        break;
       case 3:
         value = playerLevel * 30;
         break;
@@ -104,9 +104,9 @@ class Spell
         value = this.duration2;
         break;
     }
-  
+
     this.duration = (this.duration2 > 0 && value > this.duration2) ? this.duration2 : value;
-  }  
+  }
 }
 
 class SpellDatabase
@@ -155,7 +155,7 @@ class SpellDatabase
     for (let i = 0; i < spell.slotList.length; i++)
     {
       let slot = spell.slotList[i];
-      
+
       if (slot.spa === spa)
       {
         result = slot;
@@ -176,7 +176,7 @@ class SpellDatabase
   {
     let found = this.findSpaSlot(spell, spa);
     return found !== undefined && found.base1 <= value;
-  }  
+  }
 
   getAA(id, rank)
   {
@@ -188,7 +188,7 @@ class SpellDatabase
   {
     return this.spells[id] ? new Spell(this.spells[id]) : undefined;
   }
-  
+
   getWorn(id)
   {
     return this.spells[id] ? new Worn(this.spells[id]) : undefined;

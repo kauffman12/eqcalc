@@ -6,8 +6,8 @@ class Effects
   {
     // initialize
     let me = this;
-    [ 'doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier', 'luckChance' ].forEach(prop => me[prop] = 0.0);
-    [ 124, 127, 128, 132, 286, 296, 297, 302, 303, 389, 399, 413, 461, 462, 483, 484, 507 ].forEach(spa => me['spa' + spa] = 0);
+    ['doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier', 'luckChance'].forEach(prop => me[prop] = 0.0);
+    [124, 127, 128, 132, 286, 296, 297, 302, 303, 389, 399, 413, 461, 462, 483, 484, 507].forEach(spa => me['spa' + spa] = 0);
     this.chargedSpellList = [];
     this.spellProcs = [];
     this.hasSpa497 = false;
@@ -54,13 +54,13 @@ class EffectsCategory
 
     slots.forEach(slot =>
     {
-      switch(slot.spa)
+      switch (slot.spa)
       {
         case 0: case 79: case 470:
           finalEffects.spellProcs.push(slot);
           break;
 
-        case 170: 
+        case 170:
           finalEffects.nukeCritMultiplier += slot.base1;
           break;
 
@@ -85,7 +85,7 @@ class EffectsCategory
           {
             handled340 = true;
             finalEffects.spellProcs.push(slot);
-          }          
+          }
           break;
 
         case 374:
@@ -103,7 +103,7 @@ class EffectsCategory
           if ((!inTwincast || !slot.effect || !slot.effect.hasSpa497) && Math.random() <= Damage.calculateScalingMultiplier(spell.castTime))
           {
             finalEffects.spellProcs.push(slot);
-          }              
+          }
           break;
 
         case 389:
@@ -116,10 +116,10 @@ class EffectsCategory
           {
             handled469 = true;
             finalEffects.spellProcs.push(slot);
-          }          
+          }
           break;
 
-        case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389: 
+        case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389:
         case 399: case 413: case 461: case 462: case 483: case 484: case 507:
           // bards don't seem to benefit from SPA 124
           if (slot.spa !== 124 || !spell.songCap)
@@ -130,7 +130,7 @@ class EffectsCategory
             {
               if (slot.spa === 128)
               {
-                value = spell.beneficial ? slot.base1 : Damage.randomInRange(slot.base2 || 1, slot.base1 || 1);                  
+                value = spell.beneficial ? slot.base1 : Damage.randomInRange(slot.base2 || 1, slot.base1 || 1);
               }
               else
               {
@@ -179,7 +179,7 @@ class EffectsCategory
 
           break;
       }
-    }); 
+    });
   }
 
   addCategory(effectList, spell, playerClass, cacheId)
@@ -207,15 +207,15 @@ class EffectsCategory
     {
       this.processChecks = new LimitChecks();
       this.processList = [];
-  
+
       effect.slotList.forEach(slot =>
       {
-        switch(slot.spa)
+        switch (slot.spa)
         {
           // 10 means the slot is empty, 39 is twincast blocker, 148 is stacking related?
           case 10: case 39: case 148:
             break;
-         
+
           // unhandled limit checks
           case 412: case 415: case 422: case 423: case 486: case 492: case 493:
             console.debug('unhandled limit check ' + slot.spa);
@@ -267,7 +267,7 @@ class EffectsCategory
             {
               // this SPA may appear multiple times
               // exclude spells with specified SPA            
-              this.processChecks.currentHp = this.processChecks.currentHp === false ? this.processChecks.currentHp : 
+              this.processChecks.currentHp = this.processChecks.currentHp === false ? this.processChecks.currentHp :
                 this.spellDB.findSpaSlot(spell, Math.abs(slot.base1)) === undefined;
             }
             else
@@ -319,7 +319,7 @@ class EffectsCategory
             if (slot.base1 < 0)
             {
               // needs to fail if any of the exclude checks match
-              this.processChecks.spellGroup = this.processChecks.spellGroup === false ? this.processChecks.spellGroup : 
+              this.processChecks.spellGroup = this.processChecks.spellGroup === false ? this.processChecks.spellGroup :
                 !this.spellDB.isSpellInGroup(spell.id, Math.abs(slot.base1));
             }
             else
@@ -341,33 +341,33 @@ class EffectsCategory
             {
               // only include spells with specified id
               this.processChecks.spellClass = this.processChecks.spellClass || spell.spellClass === Math.abs(slot.base1);
-            }            
-            break;            
+            }
+            break;
           case 404:
             if (slot.base1 < 0)
             {
               // needs to fail if any of the exclude checks match
-              this.processChecks.spellSubclass = this.processChecks.spellSubclass === false ? this.processChecks.spellSubclass 
+              this.processChecks.spellSubclass = this.processChecks.spellSubclass === false ? this.processChecks.spellSubclass
                 : spell.spellSubclass !== Math.abs(slot.base1);
             }
             else
             {
               // only include spells with specified id
               this.processChecks.spellSubclass = this.processChecks.spellSubclass || spell.spellSubclass === Math.abs(slot.base1);
-            }            
-          break;
+            }
+            break;
           case 411: case 485:
             if (slot.base1 < 0)
             {
               // needs to fail if any of the exclude checks match
-              this.processChecks.playerClass = this.processChecks.playerClass === false ? this.processChecks.playerClass : 
+              this.processChecks.playerClass = this.processChecks.playerClass === false ? this.processChecks.playerClass :
                 ((Math.abs(slot.base1) & playerClass) !== playerClass);
             }
             else
             {
               // only include players that match the correct class
               this.processChecks.playerClass = this.processChecks.playerClass || ((slot.base1 & playerClass) === playerClass);
-            }            
+            }
             break;
           case 414:
             if (slot.base1 < 0)
@@ -394,10 +394,10 @@ class EffectsCategory
             break;
           case 490: case 511: // not sure if 511 follows this
             this.processChecks.minRecastTime = spell.recastTime >= slot.base1;
-            break;     
+            break;
           case 491:
             this.processChecks.maxRecastTime = spell.recastTime <= slot.base1;
-            break;     
+            break;
           case 495:
             this.processChecks.maxDuration = spell.duration <= slot.base1;
             break;
@@ -408,7 +408,7 @@ class EffectsCategory
             this.debugFailure(this.processUpdates(category), spell, effect);
         }
       });
-  
+
       // process remaining
       this.debugFailure(this.processUpdates(category, true), spell, effect);
     });
@@ -432,7 +432,7 @@ class EffectsCategory
             this.updateCategory(category, slot, false);
           }
         });
- 
+
         this.processChecks = new LimitChecks();
         this.processList = [];
       }
@@ -446,7 +446,7 @@ class EffectsCategory
     }
 
     return failure;
-  }  
+  }
 
   updateCategory(category, next, stackable = true)
   {
@@ -465,7 +465,7 @@ class EffectsCategory
     if (updateNextValue)
     {
       handledSlots.set(key, next);
-      category.set(next.spa, handledSlots);  
+      category.set(next.spa, handledSlots);
     }
 
     return updateNextValue;
@@ -506,7 +506,7 @@ class LimitChecks
     }
 
     return true;
-  }  
+  }
 }
 
 module.exports = EffectsCategory;
