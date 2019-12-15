@@ -10,6 +10,8 @@ class Effects
     [ 124, 127, 128, 132, 286, 296, 297, 302, 303, 389, 399, 413, 461, 462, 483, 484, 507 ].forEach(spa => me['spa' + spa] = 0);
     this.chargedSpellList = [];
     this.spellProcs = [];
+    this.hasSpa497 = false;
+    this.resetLockouts = false;
   }
 }
 
@@ -32,104 +34,152 @@ class EffectsCategory
   buildEffects(spell, inTwincast = false)
   {
     let finalEffects = new Effects();
+
+    // process the spell itself
+    this.processSlots(spell, inTwincast, spell.slotList, finalEffects);
+
+    // add up each category of effects
     this.categories.forEach(category =>
     {
-      category.forEach((slots, spa) =>
-      {
-        slots.forEach(slot =>
-        {
-          switch(slot.spa)
-          {
-            case 170: 
-              finalEffects.nukeCritMultiplier += slot.base1;
-              break;
-            case 273:
-              finalEffects.doTCritChance += slot.base1;
-              break;
-            case 212: case 294:
-              finalEffects.nukeCritChance += slot.base1;
-              break;
-            case 339:             
-              if ((!inTwincast || !category.has(497)) && Math.random() * 100 <= slot.base1)
-              {
-                finalEffects.spellProcs.push(slot.base2);
-              }
-              break;
-            case 375:
-              finalEffects.doTCritMultiplier += slot.base1;
-              break;
-            case 383:
-              if (Math.random() <= Damage.calculateScalingMultiplier(spell.castTime))
-              {
-                finalEffects.spellProcs.push(slot.base2);
-              }              
-              break;
-    
-            case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389: 
-            case 399: case 413: case 461: case 462: case 483: case 484: case 507:
-              // bards don't seem to benefit from SPA 124
-              if (slot.spa !== 124 || !spell.songCap)
-              {
-                let value = 0;
-  
-                if (slot.base1 > 0)
-                {
-                  if (spa === 128)
-                  {
-                    value = spell.beneficial ? slot.base1 : Damage.randomInRange(slot.base2 || 1, slot.base1 || 1);                  
-                  }
-                  else
-                  {
-                    value = (slot.base2 === 0 || slot.base1 === slot.base2) ? slot.base1 : Damage.randomInRange(slot.base2, slot.base1);
-                  }
-                }
-                else
-                {
-                  if (spa === 128)
-                  {
-                    value = slot.base2 === 0 ? slot.base1 : Damage.randomInRange(slot.base1, -1);
-                  }
-                  else
-                  {
-                    value = slot.base2 !== 0 ? slot.base1 : Damage.randomInRange(slot.base1, slot.base2);
-                  }
-                }
-    
-                if (slot.reduceBy > 0)
-                {
-                  value = Math.trunc(value * (1 - slot.reduceBy / 100));
-                  value = value < 0 ? 0 : value;
-                }
-  
-                // convert from percent to actual value
-                if (spa === 128)
-                {
-                  let calc = Math.trunc(spell.duration * value / 100);
-                  value = value > 0 ? Math.max(1, calc) : Math.min(-1, calc);
-                }
-  
-                // update charged map if needed
-                if (slot.effect && slot.effect.maxHitsType === Damage.MaxHitsTypes.MATCHING)
-                {
-                  finalEffects.chargedSpellList.push(slot.effect);
-                }
-    
-                finalEffects['spa' + spa] += value;
-  
-                // SPA 127 has a max value
-                if (spa === 127 && finalEffects['spa127'] > 50)
-                {
-                  finalEffects['spa127'] = 50;
-                }
-              }
-
-              break;
-          }  
-        });
-      });
+      category.forEach((slots) => this.processSlots(spell, inTwincast, slots, finalEffects));
     });
 
     return finalEffects;
+  }
+
+  processSlots(spell, inTwincast, slots, finalEffects)
+  {
+    let handled340 = false;
+    let handled469 = false;
+
+    slots.forEach(slot =>
+    {
+      switch(slot.spa)
+      {
+        case 0: case 79: case 470:
+          finalEffects.spellProcs.push(slot);
+          break;
+
+        case 170: 
+          finalEffects.nukeCritMultiplier += slot.base1;
+          break;
+
+        case 273:
+          finalEffects.doTCritChance += slot.base1;
+          break;
+
+        case 212: case 294:
+          finalEffects.nukeCritChance += slot.base1;
+          break;
+
+        case 339:
+          if ((!inTwincast || !slot.effect || !slot.effect.hasSpa497) && Math.random() * 100 <= slot.base1)
+          {
+            finalEffects.spellProcs.push(slot);
+          }
+          break;
+
+        // only one may proc per spell/effect
+        case 340:
+          if (!handled340 && Math.random() * 100 <= slot.base1)
+          {
+            handled340 = true;
+            finalEffects.spellProcs.push(slot);
+          }          
+          break;
+
+        case 374:
+          if (Math.random() * 100 <= slot.base1)
+          {
+            finalEffects.spellProcs.push(slot);
+          }
+          break;
+
+        case 375:
+          finalEffects.doTCritMultiplier += slot.base1;
+          break;
+
+        case 383:
+          if ((!inTwincast || !slot.effect || !slot.effect.hasSpa497) && Math.random() <= Damage.calculateScalingMultiplier(spell.castTime))
+          {
+            finalEffects.spellProcs.push(slot);
+          }              
+          break;
+
+        case 389:
+          finalEffects.resetLockouts = spell.id;
+          break;
+
+        // only one may proc per spell/effect
+        case 469:
+          if (!handled469 && Math.random() * 100 <= slot.base1)
+          {
+            handled469 = true;
+            finalEffects.spellProcs.push(slot);
+          }          
+          break;
+
+        case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389: 
+        case 399: case 413: case 461: case 462: case 483: case 484: case 507:
+          // bards don't seem to benefit from SPA 124
+          if (slot.spa !== 124 || !spell.songCap)
+          {
+            let value = 0;
+
+            if (slot.base1 > 0)
+            {
+              if (slot.spa === 128)
+              {
+                value = spell.beneficial ? slot.base1 : Damage.randomInRange(slot.base2 || 1, slot.base1 || 1);                  
+              }
+              else
+              {
+                value = (slot.base2 === 0 || slot.base1 === slot.base2) ? slot.base1 : Damage.randomInRange(slot.base2, slot.base1);
+              }
+            }
+            else
+            {
+              if (slot.spa === 128)
+              {
+                value = slot.base2 === 0 ? slot.base1 : Damage.randomInRange(slot.base1, -1);
+              }
+              else
+              {
+                value = slot.base2 !== 0 ? slot.base1 : Damage.randomInRange(slot.base1, slot.base2);
+              }
+            }
+
+            if (slot.reduceBy > 0)
+            {
+              value = Math.trunc(value * (1 - slot.reduceBy / 100));
+              value = value < 0 ? 0 : value;
+            }
+
+            // convert from percent to actual value
+            if (slot.spa === 128)
+            {
+              let calc = Math.trunc(spell.duration * value / 100);
+              value = value > 0 ? Math.max(1, calc) : Math.min(-1, calc);
+            }
+
+            // update charged map if needed
+            if (slot.effect && slot.effect.maxHitsType === Damage.MaxHitsTypes.MATCHING)
+            {
+              finalEffects.chargedSpellList.push(slot.effect);
+            }
+
+            finalEffects['spa' + slot.spa] += value;
+
+            // SPA 127 has a max value
+            if (slot.spa === 127 && finalEffects['spa127'] > 50)
+            {
+              finalEffects['spa127'] = 50;
+            }
+          }
+
+          break;
+      }
+    }); 
   }
 
   addCategory(effectList, spell, playerClass, cacheId)
@@ -162,8 +212,8 @@ class EffectsCategory
       {
         switch(slot.spa)
         {
-          // 10 means the slot is empty, 148 is stacking related?
-          case 10: case 148:
+          // 10 means the slot is empty, 39 is twincast blocker, 148 is stacking related?
+          case 10: case 39: case 148:
             break;
          
           // unhandled limit checks
@@ -282,54 +332,54 @@ class EffectsCategory
             this.processChecks.maxMana = spell.manaCost <= slot.base1;
             break;
           case 403:
-              if (slot.base1 < 0)
-              {
-                // needs to fail if any of the exclude checks match
-                this.processChecks.spellClass = this.processChecks.spellClass === false ? this.processChecks.spellClass : spell.spellClass !== Math.abs(slot.base1);
-              }
-              else
-              {
-                // only include spells with specified id
-                this.processChecks.spellClass = this.processChecks.spellClass || spell.spellClass === Math.abs(slot.base1);
-              }            
+            if (slot.base1 < 0)
+            {
+              // needs to fail if any of the exclude checks match
+              this.processChecks.spellClass = this.processChecks.spellClass === false ? this.processChecks.spellClass : spell.spellClass !== Math.abs(slot.base1);
+            }
+            else
+            {
+              // only include spells with specified id
+              this.processChecks.spellClass = this.processChecks.spellClass || spell.spellClass === Math.abs(slot.base1);
+            }            
             break;            
           case 404:
-              if (slot.base1 < 0)
-              {
-                // needs to fail if any of the exclude checks match
-                this.processChecks.spellSubclass = this.processChecks.spellSubclass === false ? this.processChecks.spellSubclass 
-                  : spell.spellSubclass !== Math.abs(slot.base1);
-              }
-              else
-              {
-                // only include spells with specified id
-                this.processChecks.spellSubclass = this.processChecks.spellSubclass || spell.spellSubclass === Math.abs(slot.base1);
-              }            
-            break;
+            if (slot.base1 < 0)
+            {
+              // needs to fail if any of the exclude checks match
+              this.processChecks.spellSubclass = this.processChecks.spellSubclass === false ? this.processChecks.spellSubclass 
+                : spell.spellSubclass !== Math.abs(slot.base1);
+            }
+            else
+            {
+              // only include spells with specified id
+              this.processChecks.spellSubclass = this.processChecks.spellSubclass || spell.spellSubclass === Math.abs(slot.base1);
+            }            
+          break;
           case 411: case 485:
-              if (slot.base1 < 0)
-              {
-                // needs to fail if any of the exclude checks match
-                this.processChecks.playerClass = this.processChecks.playerClass === false ? this.processChecks.playerClass : 
-                  ((Math.abs(slot.base1) & playerClass) !== playerClass);
-              }
-              else
-              {
-                // only include players that match the correct class
-                this.processChecks.playerClass = this.processChecks.playerClass || ((slot.base1 & playerClass) === playerClass);
-              }            
+            if (slot.base1 < 0)
+            {
+              // needs to fail if any of the exclude checks match
+              this.processChecks.playerClass = this.processChecks.playerClass === false ? this.processChecks.playerClass : 
+                ((Math.abs(slot.base1) & playerClass) !== playerClass);
+            }
+            else
+            {
+              // only include players that match the correct class
+              this.processChecks.playerClass = this.processChecks.playerClass || ((slot.base1 & playerClass) === playerClass);
+            }            
             break;
           case 414:
-              if (slot.base1 < 0)
-              {
-                // needs to fail if any of the exclude checks match
-                this.processChecks.spellSkill = this.processChecks.spellsKill === false ? this.processChecks.spellSkill : spell.skill !== Math.abs(slot.base1);
-              }
-              else
-              {
-                // only include spells with specified spell skill
-                this.processChecks.spellSkill = this.processChecks.spellSkill || spell.skill === Math.abs(slot.base1);
-              }
+            if (slot.base1 < 0)
+            {
+              // needs to fail if any of the exclude checks match
+              this.processChecks.spellSkill = this.processChecks.spellsKill === false ? this.processChecks.spellSkill : spell.skill !== Math.abs(slot.base1);
+            }
+            else
+            {
+              // only include spells with specified spell skill
+              this.processChecks.spellSkill = this.processChecks.spellSkill || spell.skill === Math.abs(slot.base1);
+            }
             break;
           case 460:
             this.processChecks.includeNonFocusable = spell.focusable === 1;
@@ -352,7 +402,7 @@ class EffectsCategory
             this.processChecks.maxDuration = spell.duration <= slot.base1;
             break;
           case 497:
-            this.updateCategory(category, slot);
+            effect.hasSpa497 = true;
             break;
           default:
             this.debugFailure(this.processUpdates(category), spell, effect);

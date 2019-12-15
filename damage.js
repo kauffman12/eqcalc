@@ -41,7 +41,7 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   if (isNuke)
   {
     // spell damage will only crit for a Nuke
-    beforeCritDamage += Math.trunc(exports.calculateSpellDamage(playerLevel, wornSpellDamage, spell)); 
+    beforeCritDamage += Math.trunc(exports.calculateSpellDamage(playerLevel, baseDamage, wornSpellDamage, spell)); 
 
     // SPA 302 will crit for a Nuke
     beforeCritDamage += Math.trunc(effectiveDamage * finalEffects.spa302 / 100);
@@ -97,7 +97,7 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   return { amount: total, crit: crit, lucky: lucky };
 }
 
-exports.calculateSpellDamage = (playerLevel, wornSpellDamage, spell) =>
+exports.calculateSpellDamage = (playerLevel, baseDamage, wornSpellDamage, spell) =>
 {
   let spellDamage = 0;
 
@@ -107,7 +107,7 @@ exports.calculateSpellDamage = (playerLevel, wornSpellDamage, spell) =>
     spellDamage = wornSpellDamage * exports.calculateScalingMultiplier(totalCastTime);
   }
 
-  return spellDamage;
+  return spellDamage > baseDamage ? 1 : spellDamage;
 }
 
 exports.calculateScalingMultiplier = (castTime) =>

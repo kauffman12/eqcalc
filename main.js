@@ -56,11 +56,15 @@ class PlayerState
         lockouts = [];
         actionLockTime = 0;
 
-        this.castQueue.forEach(item =>
+        let resetSpell = this.spellDB.getSpell(this.resetLockouts);
+        if (resetSpell)
         {
-          let category = this.effectsBuilder.buildCategory([this.resetLockouts], item.spell, this.playerClass, false);
-          item.readyTime = (category.has(389)) ? this.currentTime : item.readyTime;
-        });
+          this.castQueue.forEach(item =>
+          {
+            let category = this.effectsBuilder.buildCategory([resetSpell], item.spell, this.playerClass, false);
+            item.readyTime = (category.has(389)) ? this.currentTime : item.readyTime;
+          });    
+        }
 
         this.resetLockouts = undefined;
       }
@@ -157,46 +161,17 @@ class PlayerState
   cast(spell, inTwincast)
   {
     let finalEffects = this.getEffects(spell, inTwincast);
+
+    this.resetLockouts = finalEffects.resetLockouts;
     let needTwincast = !inTwincast && finalEffects.spa399 > 0 && Math.random() * 100 <= finalEffects.spa399;
 
     let result = { name: spell.name };
     this.updateSpellDuration(spell, finalEffects);
 
-    let handled340 = false;
-    let handled469 = false;
-    spell.slotList.forEach(slot =>
+    finalEffects.spellProcs.forEach(slot =>
     {
       switch(slot.spa)
       {
-        case 340:
-            if (!handled340 && Math.random() * 100 <= slot.base1)
-            {
-              handled340 = this.addProc(result, this.spellDB.getSpell(slot.base2));
-            }          
-          break;
-
-        case 374:
-          if (Math.random() * 100 <= slot.base1)
-          {
-            this.addProc(result, this.spellDB.getSpell(slot.base2));
-          }
-          break;
-
-        case 389:
-          this.resetLockouts = spell;
-          break;
-
-        case 469:
-          if (!handled469 && Math.random() * 100 <= slot.base1)
-          {
-            handled469 = this.addProc(result, this.spellDB.getBestSpellInGroup(slot.base2));
-          }
-          break;
-
-        case 470:
-          this.addProc(result, this.spellDB.getBestSpellInGroup(slot.base2));
-          break;
-
         case 0: case 79:
           // execute right away if it's a nuke
           if ((spell.duration === 0 || slot.spa === 79) && !spell.isSelfDamaging())
@@ -214,13 +189,26 @@ class PlayerState
             foundDot.doTwincast = needTwincast;
             this.doTQueue.push(foundDot);
           }
-
           break;
+
+        case 339: case 340: case 374: case 383:
+          this.addProc(result, this.spellDB.getSpell(slot.base2), slot.base2);       
+          break;
+
+        case 469: case 470:
+          this.addProc(result, this.spellDB.getBestSpellInGroup(slot.base2), slot.base2);
+          break;    
       }
     });
 
     // charge spells
     this.charge(finalEffects.chargedSpellList);
+
+    // recouse is done last before possible twincast
+    if (spell.recourseId)
+    {
+      this.addProc(result, this.spellDB.getSpell(spell.recourseId));
+    }
 
     // if spell has duration that add it to the buff list
     if (spell.duration > 0)
@@ -228,15 +216,6 @@ class PlayerState
       let found = this.buffList.find(buff => buff.id === spell.id) || spell;
       this.buffList.push(found);
     }
-
-    // handle procs
-    finalEffects.spellProcs.forEach(proc =>
-    {
-      this.addProc(result, this.spellDB.getSpell(proc));
-    });
-
-    // recouse is done last before possible twincast
-    this.addProc(result, this.spellDB.getSpell(spell.recourseId));
 
     // twincast if needed
     if (needTwincast && result.damage)
@@ -247,18 +226,18 @@ class PlayerState
     return result;
   }
 
-  addProc(result, proc)
+  addProc(result, proc, spellId)
   {
-    let added = false;
+    result.procs = result.procs || [];
 
     if (proc)
     {
-      result.procs = result.procs || [];
       result.procs.push(this.cast(proc));
-      added = true;
     }
-
-    return added;
+    else
+    {
+      result.procs.push({ name: 'Missing Spell (Ignored)', id: spellId });
+    }
   }
 
   updateSpellDuration(spell, finalEffects)
@@ -453,7 +432,7 @@ let testWizard =
 {
   getState: () =>
   {
-    let state = new PlayerState(Damage.Classes.WIZ, 110, 2500, 0, 100);
+    let state = new PlayerState(Damage.Classes.WIZ, 110, 2349, 0, 100);
   
     // static effects
     state.addAA(114, 35);      // Fury of Magic
@@ -484,11 +463,12 @@ let testWizard =
     state.addWorn(50833);      // Threads Belt
   
     // cast queue
-    state.addToQueue(58164);   // Stormjolt
+    //state.addToQueue(58164);   // Stormjolt
     state.addToQueue(56812);   // Claw of Qunard
     state.addToQueue(56897);   // Braid
     state.addToQueue(56796);   // Cloudburst
     state.addToQueue(56872);   // skyfire
+    //state.addToQueue(56774);   // wildflash
 
     //state.addToQueue(58149);   // dissident
     //state.addToQueue(56848);   // icefloe
