@@ -20,7 +20,7 @@ exports.calculateBaseNukeCritChance = (playerClass, baseNukeCritChance) =>
 }
 
 exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck, isNuke, ticks, finalEffects) =>
-{
+{ 
   // SPA 413 focuses base damage but is rounded differently for DoTs
   let spa413 = finalEffects.spa413 * baseDamage / 100;
   let effectiveDamage = baseDamage + (isNuke ? Math.trunc(spa413) : exports.roundAsDec32(spa413));
@@ -67,7 +67,7 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   let lucky = crit && (Math.random() * 100 <= finalEffects.luckChance);
 
   // add lucky crit multiplier?
-  let luckyCritMultiplier = lucky ? exports.randomInRange(5 * (Math.trunc(luck / 10) + 1), 5 * (Math.trunc(luck / 10) + 2)) : 0;
+  let luckyCritMultiplier = lucky ? exports.randomInRange(500 * (Math.trunc(luck / 10) + 1), 500 * (Math.trunc(luck / 10) + 2)) / 100 : 0;
 
   // calculate crit damage
   let critMultiplier = luckyCritMultiplier + (isNuke ? finalEffects.nukeCritMultiplier : finalEffects.doTCritMultiplier);
@@ -86,7 +86,6 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   // SPA 462, 483, 484 and 507 are added to the end and not focused by anything else
   total += spa483 + Math.trunc(finalEffects.spa462 / ticks) + Math.trunc(finalEffects.spa484 / ticks);
   total += exports.roundAsDec32(finalEffects.spa507 * effectiveDamage / 1000); // 1000 is correct
-
   return { amount: total, crit: crit, lucky: lucky };
 }
 
@@ -105,18 +104,18 @@ exports.calculateSpellDamage = (playerLevel, baseDamage, wornSpellDamage, spell)
 
 exports.calculateScalingMultiplier = (castTime) =>
 {
-  let multiplier = 0.2499;
+  let multiplier = 0.2499375;  // 1000 / 4001
 
   if (castTime >= 2500 && castTime <= 7000)
   {
-    multiplier = .000167 * (castTime - 1000);
+    multiplier = (castTime - 1000) / 1000 * 0.1666388; // 1000 / 6001
   }
   else if (castTime > 7000)
   {
-    multiplier = castTime / 7000;
+    multiplier = castTime / 7001;
   }
 
-  return multiplier;
+  return +multiplier.toFixed(7);
 }
 
 exports.calculateValue = (calc, base1, max, tick, playerLevel) =>

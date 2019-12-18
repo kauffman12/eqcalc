@@ -6,7 +6,7 @@ class Effects
   {
     // initialize
     let me = this;
-    ['doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier', 'luckChance'].forEach(prop => me[prop] = 0.0);
+    ['doTCritChance', 'doTCritMultiplier', 'nukeCritChance', 'nukeCritMultiplier', 'luckChance'].forEach(prop => me[prop] = 0);
     [124, 127, 128, 132, 286, 296, 297, 302, 303, 389, 399, 413, 461, 462, 483, 484, 507].forEach(spa => me['spa' + spa] = 0);
     this.chargedSpellList = [];
     this.spellProcs = [];
@@ -24,6 +24,13 @@ class EffectsCategory
     this.categoryCache = new Map();
     this.processChecks = null;
     this.processList = null;
+
+    this.instrumentSkillMap = new Map();
+    this.instrumentSkillMap.set(23, 54); // Woodwind
+    this.instrumentSkillMap.set(24, 49); // Stringed
+    this.instrumentSkillMap.set(25, 12); // Brass
+    this.instrumentSkillMap.set(26, 70); // Percussion
+    this.instrumentSkillMap.set(50, 41); // Singing
   }
 
   getChargedSpells()
@@ -62,6 +69,14 @@ class EffectsCategory
 
         case 170:
           finalEffects.nukeCritMultiplier += slot.base1;
+          break;
+
+        case 260:
+          if (slot.base2 === 51 || this.instrumentSkillMap.get(slot.base2) === spell.skill)
+          {
+            // just count it as 413 to make it easy
+            finalEffects.spa413 += slot.base1 * 10;
+          }
           break;
 
         case 273:
@@ -119,67 +134,79 @@ class EffectsCategory
           }
           break;
 
-        case 124: case 127: case 128: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389:
+        case 128:
+          let value = 0;
+
+          if (slot.base1 > 0)
+          {
+            value = spell.beneficial ? slot.base1 : Damage.randomInRange(slot.base2 || 1, slot.base1 || 1);
+          }
+          else
+          {
+            value = slot.base2 === 0 ? slot.base1 : Damage.randomInRange(slot.base1, -1);
+          }
+
+          this.handleFocus(spell, slot, value, finalEffects);
+          break;
+
+        case 124: case 127: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389:
         case 399: case 413: case 461: case 462: case 483: case 484: case 507:
-          // bards don't seem to benefit from SPA 124
-          if (slot.spa !== 124 || !spell.songCap)
+          // bards don't seem to benefit from SPA 124 or 461
+          if (!spell.songCap || (slot.spa !== 124 && slot.spa !== 461 && slot.spa !== 462))
           {
             let value = 0;
 
             if (slot.base1 > 0)
             {
-              if (slot.spa === 128)
-              {
-                value = spell.beneficial ? slot.base1 : Damage.randomInRange(slot.base2 || 1, slot.base1 || 1);
-              }
-              else
-              {
-                value = (slot.base2 === 0 || slot.base1 === slot.base2) ? slot.base1 : Damage.randomInRange(slot.base2, slot.base1);
-              }
+              value = (slot.base2 === 0 || slot.base1 === slot.base2) ? slot.base1 : Damage.randomInRange(slot.base2, slot.base1);
             }
             else
             {
-              if (slot.spa === 128)
-              {
-                value = slot.base2 === 0 ? slot.base1 : Damage.randomInRange(slot.base1, -1);
-              }
-              else
-              {
-                value = slot.base2 !== 0 ? slot.base1 : Damage.randomInRange(slot.base1, slot.base2);
-              }
+              value = slot.base2 !== 0 ? slot.base1 : Damage.randomInRange(slot.base1, slot.base2);
             }
 
-            if (slot.reduceBy > 0)
-            {
-              value = Math.trunc(value * (1 - slot.reduceBy / 100));
-              value = value < 0 ? 0 : value;
-            }
-
-            // convert from percent to actual value
-            if (slot.spa === 128)
-            {
-              let calc = Math.trunc(spell.duration * value / 100);
-              value = value > 0 ? Math.max(1, calc) : Math.min(-1, calc);
-            }
-
-            // update charged map if needed
-            if (slot.effect && slot.effect.maxHitsType === Damage.MaxHitsTypes.MATCHING)
-            {
-              finalEffects.chargedSpellList.push(slot.effect);
-            }
-
-            finalEffects['spa' + slot.spa] += value;
-
-            // SPA 127 has a max value
-            if (slot.spa === 127 && finalEffects['spa127'] > 50)
-            {
-              finalEffects['spa127'] = 50;
-            }
+            this.handleFocus(spell, slot, value, finalEffects);
           }
 
           break;
       }
+
+      // SPA 127 has a max value
+      if (slot.spa === 127 && finalEffects.spa127 > 50)
+      {
+        finalEffects.spa127 = 50;
+      }
+
+      // Song Focus has a max as well
+      if (spell.songCap > 0 && finalEffects.spa413 > spell.songCap)
+      {
+        finalEffects.spa413 = spell.songCap;
+      }
     });
+  }
+
+  handleFocus(spell, slot, value, finalEffects)
+  {
+    if (slot.reduceBy > 0)
+    {
+      value = Math.trunc(value * (1 - slot.reduceBy / 100));
+      value = value < 0 ? 0 : value;
+    }
+
+    // convert from percent to actual value
+    if (slot.spa === 128)
+    {
+      let calc = Math.trunc(spell.duration * value / 100);
+      value = value > 0 ? Math.max(1, calc) : Math.min(-1, calc);
+    }
+
+    // update charged map if needed
+    if (slot.effect && slot.effect.maxHitsType === Damage.MaxHitsTypes.MATCHING)
+    {
+      finalEffects.chargedSpellList.push(slot.effect);
+    }
+
+    finalEffects['spa' + slot.spa] += value;
   }
 
   addCategory(effectList, spell, playerClass, cacheId)
@@ -223,7 +250,7 @@ class EffectsCategory
             break;
 
           // Crit Damage Modifiers don't follow limit checks, do not require spells to be focusable, and stack
-          case 170: case 273: case 294: case 375:
+          case 170: case 260: case 273: case 294: case 375:
             this.updateCategory(category, slot);
             break;
 

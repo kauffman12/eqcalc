@@ -523,53 +523,58 @@ let testBard =
 {
   getState: () =>
   {
-    let state = new PlayerState(Damage.Classes.BRD, 115, 0, 0, 100);
+    let state = new PlayerState(Damage.Classes.BRD, 115, 436, 0, 100);
 
     // static effects
-    //state.addAA(358, 21);      // Fury of Magic
-    //state.addAA(259, 12);      // Critical Afflication
-    //state.addAA(1022, 27);     // Destructive Fury
-    //state.addAA(942, 28);      // Destructive Cascade
-    //state.addAA(2162, 45);     // Improved Chants
-    //state.addAA(1254, 6);      // Twinsong
+    state.addAA(358, 21);      // Fury of Magic
+    state.addAA(259, 12);      // Critical Afflication
+    state.addAA(1022, 27);     // Destructive Fury
+    state.addAA(942, 28);      // Destructive Cascade
+    state.addAA(2161, 8);      // Brusco's Burning Call
+    state.addAA(2162, 45);     // Improved Chants
+    state.addAA(90, 10);       // Instrument Mastery
+    state.addAA(118, 1);       // Singing Mastery
+    state.addAA(1254, 6);      // Twinsong
 
-    //state.addWorn(46985);      // Restless Focus
-    //state.addWorn(21238);      // TBL Group Gloves
-    //state.addWorn(21188);      // TBL Group Helm
-    //state.addWorn(21138);      // TBL Group Arms
-    //state.addWorn(45953);      // TBL Raid Range
-    //state.addWorn(46666);      // Legs haste
+    state.addWorn(46985);      // Restless Focus
+    state.addWorn(21238);      // TBL Group Gloves
+    state.addWorn(21188);      // TBL Group Helm
+    state.addWorn(21138);      // TBL Group Arms
+    state.addWorn(46666);      // Legs haste
 
     // cast queue
-    //state.addToQueue(59587, 20);   // Sontalak's Chant
-    //state.addToQueue(59528, 20);   // Malvus's Chant
-    //state.addToQueue(59501, 20);   // Yelinak's Chant
-    //state.addToQueue(59479, 20);   // Zlexak's Chant
-    state.addToQueue(56151, 20);    // Hoshkar's Chant
+    state.addToQueue(59587, 20);   // Sontalak's Chant
+    state.addToQueue(59528, 20);   // Malvus's Chant
+    state.addToQueue(59501, 20);   // Yelinak's Chant
+    state.addToQueue(59479, 20);   // Zlexak's Chant
+    //state.addToQueue(59566, 10);   // Sofia's Burning Call II
+    state.addToQueue(56175);       // Sathir's Insult
 
     return state;
   },
 
   updateBuffs: (state) =>
   {
-    //state.addBuff(6271);      // Vesagran
-    //state.addBuff(41287);     // Auspice
-    //state.addBuff(52268);     // Glyph
-    //state.addBuff(37139);     // Fierce Eye
-    //state.addBuff(38189);     // IOG
+    state.addBuff(6271);      // Vesagran
+    state.addBuff(41287);     // Auspice
+    state.addBuff(52268);     // Glyph
+    state.addBuff(37139);     // Fierce Eye
+    state.addBuff(38189);     // IOG
     state.addBuff(58579);     // Cleric Spell Haste
-    //state.addBuff(52211);     // Season's Wrath
-    state.addBuff(59464);       // Aria rk2
-    //state.addBuff(59281);     // Erupting Sunray
-    //state.freezeCurrentBuffs();
+    state.addBuff(59524);     // Sontalak's Aria
+    state.addBuff(52211);     // Season's Wrath
+    state.addBuff(59464);     // Aria rk2
+    state.addBuff(59280);     // Erupting Sunray
+    state.addBuff(46765);     // Masterful Root
+    state.addBuff(16848);     // Bard Synergy
   }
 };
 
-let tester = testWizard;
+let tester = testBard;
 let state = tester.getState();
 
-let tests = 1000;
-let runTime = 300;
+let tests = 1;
+let runTime = 60;
 let counter = new DamageCounter(tests);
 
 for (let i = 0; i < tests; i++)
@@ -582,7 +587,7 @@ for (let i = 0; i < tests; i++)
 
   state.run(runTime).forEach(result =>
   {
-    //console.log(Util.inspect(result, { compact: true, depth: 5, breakLength: 180, colors: true }));
+    console.log(Util.inspect(result, { compact: true, depth: 5, breakLength: 180, colors: true }));
     counter.add(result);
   });
 }
