@@ -16,11 +16,11 @@ class PlayerState
     this.increaseBuffDuration = 2.0;
     this.lagTime = lagTime;
     this.level = level;
-    this.luck = luck;
     this.playerClass = playerClass;
     this.spellDB = new SpellDatabase(playerClass);
     this.spellDamage = spellDamage;
     this.effectsBuilder = new EffectsCategory(this.spellDB);
+    this.luckValue = luck > 0 ? Math.min(Damage.LuckValues.length - 1, Math.trunc(luck / 10)) : undefined;
 
     this.aaList = [];
     this.buffList = [];
@@ -132,7 +132,7 @@ class PlayerState
             {
               // base damage can increase with time and needs to be calculated per tick
               let baseDamage = Math.abs(Damage.calculateValue(slot.calc, slot.base1, slot.max, spell.ticksRemaining, this.level));
-              result.damage = Damage.calculateDamage(this.level, this.spellDamage, spell, baseDamage, this.luck, false, spell.ticks, this.getEffects(spell));
+              result.damage = Damage.calculateDamage(this.level, this.spellDamage, spell, baseDamage, this.luckValue, false, spell.ticks, this.getEffects(spell));
 
               if (spell.doTwincast)
               {
@@ -177,7 +177,7 @@ class PlayerState
             let baseDamage = Math.abs(Damage.calculateValue(slot.calc, slot.base1, slot.max, 1, this.level));
 
             // add damage for one hit / tick
-            result.damage = Damage.calculateDamage(this.level, this.spellDamage, spell, baseDamage, this.luck, true, 1, finalEffects);
+            result.damage = Damage.calculateDamage(this.level, this.spellDamage, spell, baseDamage, this.luckValue, true, 1, finalEffects);
             result.damage.spa = slot.spa;
           }
           else if (!inTwincast)
@@ -279,14 +279,14 @@ class PlayerState
     this.effectsBuilder.addCategory(this.wornList, spell, this.playerClass, 'wornCacheId');
     this.effectsBuilder.addCategory(this.buffList, spell, this.playerClass);
 
-    let finalEffects = this.effectsBuilder.buildEffects(spell, inTwincast);
+    let finalEffects = this.effectsBuilder.buildEffects(spell, this.level, inTwincast);
     finalEffects.doTCritChance += this.baseDoTCritChance;
     finalEffects.doTCritMultiplier += this.baseDoTCritMultiplier;
     finalEffects.nukeCritChance += Damage.calculateBaseNukeCritChance(this.playerClass, this.baseNukeCritChance);
     finalEffects.nukeCritMultiplier += this.baseNukeCritMultiplier;
 
     // update luck chance
-    finalEffects.luckChance = this.luck >= 10 ? 50 : this.luck > 0 ? 45 : 0;
+    finalEffects.luckChance = this.luckValue >= 1 ? 50 : this.luckValue === 0 ? 45 : 0;
 
     // DoT classes have same base 100% but it does not stack with Destructive Cascade
     // unlike Destructive Fury and Nukes
@@ -429,42 +429,47 @@ let testWizard =
 {
   getState: () =>
   {
-    let state = new PlayerState(Damage.Classes.WIZ, 110, 2349, 0, 100);
+    let state = new PlayerState(Damage.Classes.WIZ, 115, 1789, 72, 100);
 
     // static effects
     state.addAA(114, 35);      // Fury of Magic
-    state.addAA(397, 36);      // Destructive Fury
-    state.addAA(1292, 11);     // Skyblaze Focus
-    state.addAA(1291, 11);     // Rimeblast Focus
+    state.addAA(397, 38);      // Destructive Fury
+    state.addAA(1292, 13);     // Skyblaze Focus
+    state.addAA(1291, 12);     // Rimeblast Focus
     state.addAA(1033, 11);     // Flash Focus
     state.addAA(1031, 11);     // Claw Focus
     state.addAA(1034, 11);     // Cloudburst Focus
+    state.addAA(1295, 13);     // Flashchar Focus
     state.addAA(1294, 10);     // Vortex Focus
     state.addAA(44, 10);       // Quick Damage
     state.addAA(1263, 8);      // Destructive Adept
     state.addAA(850, 20);      // Sorc Vengeance
     state.addAA(476, 5);       // Keepers 5
-    state.addAA(1405, 5);      // Twincast 5%
-    state.addAA(1664, 8);      // Twinproc
-    state.addAA(1264, 3);      // Arcane Fusion
+    //state.addAA(1405, 5);      // Twincast 5%
+    //state.addAA(1664, 8);      // Twinproc
+    //state.addAA(1264, 3);      // Arcane Fusion
     state.addWorn(49694);      // Eyes of Life and Decay
-    state.addWorn(45815);      // TBL Raid Robe
-    state.addWorn(45949);      // TBL Raid Gloves
-    state.addWorn(45945);      // TBL Raid Helm
-    state.addWorn(45947);      // TBL Raid Arms
+    state.addWorn(46983);      // Restless Focus
+    //state.addWorn(45815);      // TBL Raid Robe
+    state.addWorn(46933);      // ToV Group Robe
+    //state.addWorn(45949);      // TBL Raid Gloves
+    //state.addWorn(45945);      // TBL Raid Helm
+    //state.addWorn(45947);      // TBL Raid Arms
     state.addWorn(46666);      // Legs haste
     state.addWorn(57723);      // Skyfire Type 3
     state.addWorn(57727);      // Cloudburst Type 3
     state.addWorn(57724);      // Claw Type 3
     //state.addWorn(24417);      // TBM belt
-    state.addWorn(50833);      // Threads Belt
+    //state.addWorn(50833);      // Threads Belt
 
     // cast queue
     //state.addToQueue(58164);   // Stormjolt
-    state.addToQueue(56812);   // Claw of Qunard
-    state.addToQueue(56897);   // Braid
-    state.addToQueue(56796);   // Cloudburst
+    //state.addToQueue(56812);   // Claw of Qunard
+    //state.addToQueue(56897);   // Braid
+    //state.addToQueue(56796);   // Cloudburst
     state.addToQueue(56872);   // skyfire
+    //state.addToQueue(60147);   // Flashbrand rk2
+    //state.addToQueue(60144);   // Ice Comet rk2
     //state.addToQueue(56774);   // wildflash
 
     //state.addToQueue(58149);   // dissident
@@ -475,13 +480,13 @@ let testWizard =
   updateBuffs: (state) =>
   {
     state.addBuff(58579);     // Cleric Spell Haste
-    state.addBuff(51502);     // Improved Familiar
-    state.addBuff(49353);     // Dragonmagic Potion
+    //state.addBuff(51502);     // Improved Familiar
+    //state.addBuff(49353);     // Dragonmagic Potion
     //state.addBuff(18701);     // Twincast Aura rk3
     //state.addBuff(51599);     // IOG
     //state.addBuff(51090);     // Improved Twincast
     //state.addBuff(18882);     // Twincast
-    state.freezeCurrentBuffs();
+    //state.freezeCurrentBuffs();
   }
 };
 
@@ -570,11 +575,11 @@ let testBard =
   }
 };
 
-let tester = testBard;
+let tester = testDruid;
 let state = tester.getState();
 
 let tests = 1;
-let runTime = 60;
+let runTime = 1000;
 let counter = new DamageCounter(tests);
 
 for (let i = 0; i < tests; i++)

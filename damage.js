@@ -1,6 +1,11 @@
-exports.Classes = { WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512, SHM: 1024, NEC: 2048, WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536 }
+exports.Classes = { WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512, SHM: 1024, NEC: 2048, WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536 };
 
-exports.MaxHitsTypes = { OUTGOING: 4, MATCHING: 7 }
+// 80 Luck = 30 - 33
+// 70 Luck = 29 - 32
+// 60 Luck = 27 - 32
+exports.LuckValues = [ [5, 10], [10, 15], [15, 20], [20, 25], [22, 27], [25, 30], [27, 32], [29, 32], [30, 33] ];
+
+exports.MaxHitsTypes = { OUTGOING: 4, MATCHING: 7 };
 
 exports.TickLength = 6000;
 
@@ -63,11 +68,12 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
 
   // did the spell crit?
   let critChance = spell.fixedCritChance >= 0 ? spell.fixedCritChance : (isNuke ? finalEffects.nukeCritChance : finalEffects.doTCritChance);
+
   let crit = Math.random() * 100 <= critChance;
   let lucky = crit && (Math.random() * 100 <= finalEffects.luckChance);
 
   // add lucky crit multiplier?
-  let luckyCritMultiplier = lucky ? exports.randomInRange(500 * (Math.trunc(luck / 10) + 1), 500 * (Math.trunc(luck / 10) + 2)) / 100 : 0;
+  let luckyCritMultiplier = lucky ? exports.randomInRange(exports.LuckValues[luck][0] * 100, exports.LuckValues[luck][1] * 100) / 100 : 0;
 
   // calculate crit damage
   let critMultiplier = luckyCritMultiplier + (isNuke ? finalEffects.nukeCritMultiplier : finalEffects.doTCritMultiplier);
@@ -104,22 +110,22 @@ exports.calculateSpellDamage = (playerLevel, baseDamage, wornSpellDamage, spell)
 
 exports.calculateScalingMultiplier = (castTime) =>
 {
-  let multiplier = 0.2499375;  // 1000 / 4001
+  let multiplier = 0.25;
 
   if (castTime >= 2500 && castTime <= 7000)
   {
-    multiplier = (castTime - 1000) / 1000 * 0.1666388; // 1000 / 6001
+    multiplier = (castTime - 1000) / 1000 * 0.1666667;
   }
   else if (castTime > 7000)
   {
-    multiplier = castTime / 7001;
+    multiplier = castTime / 7000;
   }
 
-  return +multiplier.toFixed(7);
+  return multiplier;
 }
 
 exports.calculateValue = (calc, base1, max, tick, playerLevel) =>
-{
+{ 
   // default to base1 or max depending on normal calc values
   let result = (calc === 100 && max > 0 && base1 > max) ? max : base1;
 

@@ -38,23 +38,23 @@ class EffectsCategory
     return this.chargedSpellList;
   }
 
-  buildEffects(spell, inTwincast = false)
+  buildEffects(spell, playerLevel, inTwincast = false)
   {
     let finalEffects = new Effects();
 
     // process the spell itself
-    this.processSlots(spell, inTwincast, spell.slotList, finalEffects);
+    this.processSlots(spell, inTwincast, spell.slotList, finalEffects, playerLevel);
 
     // add up each category of effects
     this.categories.forEach(category =>
     {
-      category.forEach((slots) => this.processSlots(spell, inTwincast, slots, finalEffects));
+      category.forEach((slots) => this.processSlots(spell, inTwincast, slots, finalEffects, playerLevel));
     });
 
     return finalEffects;
   }
 
-  processSlots(spell, inTwincast, slots, finalEffects)
+  processSlots(spell, inTwincast, slots, finalEffects, playerLevel)
   {
     let handled340 = false;
     let handled469 = false;
@@ -67,6 +67,14 @@ class EffectsCategory
           finalEffects.spellProcs.push(slot);
           break;
 
+        case 118:
+          if (spell.skill === 41) // singing
+          {
+            // just count it as 413 to make it easy
+            finalEffects.spa413 += Damage.calculateValue(slot.calc, slot.base1, slot.max, 1, playerLevel) * 10;
+          }          
+          break;
+
         case 170:
           finalEffects.nukeCritMultiplier += slot.base1;
           break;
@@ -75,7 +83,7 @@ class EffectsCategory
           if (slot.base2 === 51 || this.instrumentSkillMap.get(slot.base2) === spell.skill)
           {
             // just count it as 413 to make it easy
-            finalEffects.spa413 += slot.base1 * 10;
+            finalEffects.spa413 += Damage.calculateValue(slot.calc, slot.base1, slot.max, 1, playerLevel) * 10;
           }
           break;
 
@@ -134,6 +142,14 @@ class EffectsCategory
           }
           break;
 
+        case 286: case 297: case 303: case 389: case 399: case 413: case 462: case 484:
+          // bards don't seem to benefit from SPA 462
+          if (!spell.songCap || slot.spa !== 462)
+          {
+            this.handleFocus(spell, slot, Damage.calculateValue(slot.calc, slot.base1, slot.max, 1, playerLevel), finalEffects);
+          }
+          break;  
+
         case 128:
           let value = 0;
 
@@ -146,13 +162,13 @@ class EffectsCategory
             value = slot.base2 === 0 ? slot.base1 : Damage.randomInRange(slot.base1, -1);
           }
 
+          value = Damage.calculateValue(slot.calc, value, slot.max, 1, playerLevel);
           this.handleFocus(spell, slot, value, finalEffects);
           break;
 
-        case 124: case 127: case 132: case 212: case 286: case 296: case 297: case 302: case 303: case 389:
-        case 399: case 413: case 461: case 462: case 483: case 484: case 507:
+        case 124: case 127: case 132: case 296: case 302: case 461: case 483: case 507:
           // bards don't seem to benefit from SPA 124 or 461
-          if (!spell.songCap || (slot.spa !== 124 && slot.spa !== 461 && slot.spa !== 462))
+          if (!spell.songCap || (slot.spa !== 124 && slot.spa !== 461))
           {
             let value = 0;
 
@@ -165,6 +181,7 @@ class EffectsCategory
               value = slot.base2 !== 0 ? slot.base1 : Damage.randomInRange(slot.base1, slot.base2);
             }
 
+            value = Damage.calculateValue(slot.calc, value, slot.max, 1, playerLevel);
             this.handleFocus(spell, slot, value, finalEffects);
           }
 
@@ -250,7 +267,7 @@ class EffectsCategory
             break;
 
           // Crit Damage Modifiers don't follow limit checks, do not require spells to be focusable, and stack
-          case 170: case 260: case 273: case 294: case 375:
+          case 118: case 170: case 260: case 273: case 294: case 375:
             this.updateCategory(category, slot);
             break;
 
