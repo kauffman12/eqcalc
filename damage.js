@@ -114,7 +114,7 @@ exports.calculateScalingMultiplier = (castTime) =>
 
   if (castTime >= 2500 && castTime <= 7000)
   {
-    multiplier = (castTime - 1000) / 1000 * 0.1666667;
+    multiplier = (castTime - 1000) / 1000 * 1 / 6;
   }
   else if (castTime > 7000)
   {

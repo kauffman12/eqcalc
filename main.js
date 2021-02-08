@@ -429,11 +429,11 @@ let testWizard =
 {
   getState: () =>
   {
-    let state = new PlayerState(Damage.Classes.WIZ, 115, 1789, 72, 100);
+    let state = new PlayerState(Damage.Classes.WIZ, 115, 1248, 38, 100);
 
     // static effects
     state.addAA(114, 35);      // Fury of Magic
-    state.addAA(397, 38);      // Destructive Fury
+    state.addAA(397, 39);      // Destructive Fury
     state.addAA(1292, 13);     // Skyblaze Focus
     state.addAA(1291, 12);     // Rimeblast Focus
     state.addAA(1033, 11);     // Flash Focus
@@ -442,21 +442,21 @@ let testWizard =
     state.addAA(1295, 13);     // Flashchar Focus
     state.addAA(1294, 10);     // Vortex Focus
     state.addAA(44, 10);       // Quick Damage
-    state.addAA(1263, 8);      // Destructive Adept
-    state.addAA(850, 20);      // Sorc Vengeance
+    state.addAA(1263, 10);      // Destructive Adept
+    state.addAA(850, 25);      // Sorc Vengeance
     state.addAA(476, 5);       // Keepers 5
     //state.addAA(1405, 5);      // Twincast 5%
     //state.addAA(1664, 8);      // Twinproc
     //state.addAA(1264, 3);      // Arcane Fusion
-    state.addWorn(49694);      // Eyes of Life and Decay
-    state.addWorn(46983);      // Restless Focus
-    //state.addWorn(45815);      // TBL Raid Robe
-    state.addWorn(46933);      // ToV Group Robe
+    //state.addWorn(49694);      // Eyes of Life and Decay
+    //state.addWorn(46983);      // Restless Focus
+    state.addWorn(46934);        // ToV Raid Robe
+    //state.addWorn(46933);      // ToV Group Robe
     //state.addWorn(45949);      // TBL Raid Gloves
     //state.addWorn(45945);      // TBL Raid Helm
-    //state.addWorn(45947);      // TBL Raid Arms
+    state.addWorn(46645);      // ToV Raid Arms
     state.addWorn(46666);      // Legs haste
-    state.addWorn(57723);      // Skyfire Type 3
+    state.addWorn(60923);      // Brand Type 3
     state.addWorn(57727);      // Cloudburst Type 3
     state.addWorn(57724);      // Claw Type 3
     //state.addWorn(24417);      // TBM belt
@@ -467,7 +467,7 @@ let testWizard =
     //state.addToQueue(56812);   // Claw of Qunard
     //state.addToQueue(56897);   // Braid
     //state.addToQueue(56796);   // Cloudburst
-    state.addToQueue(56872);   // skyfire
+    state.addToQueue(60166);    // brand
     //state.addToQueue(60147);   // Flashbrand rk2
     //state.addToQueue(60144);   // Ice Comet rk2
     //state.addToQueue(56774);   // wildflash
@@ -575,13 +575,14 @@ let testBard =
   }
 };
 
-let tester = testDruid;
+let tester = testWizard;
 let state = tester.getState();
 
-let tests = 1;
-let runTime = 1000;
+let tests = 20000;
+let runTime = 5;
 let counter = new DamageCounter(tests);
 
+let damageSet = new Set();
 for (let i = 0; i < tests; i++)
 {
   // clear out any old buffs
@@ -592,9 +593,13 @@ for (let i = 0; i < tests; i++)
 
   state.run(runTime).forEach(result =>
   {
-    console.log(Util.inspect(result, { compact: true, depth: 5, breakLength: 180, colors: true }));
-    counter.add(result);
+    //console.log(Util.inspect(result, { compact: true, depth: 5, breakLength: 180, colors: true }));
+    //counter.add(result);
+    damageSet.add(Number(result.damage.amount));
   });
 }
 
-counter.printStats();
+[...damageSet].sort((a, b) => a - b).forEach(item => console.log(item));
+console.log(damageSet.size + " possible values");
+
+//counter.printStats();
