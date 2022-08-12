@@ -1,9 +1,12 @@
 exports.Classes = { WAR: 2, CLR: 4, PAL: 8, RNG: 16, SHD: 32, DRU: 64, MNK: 128, BRD: 256, ROG: 512, SHM: 1024, NEC: 2048, WIZ: 4096, MAG: 8192, ENC: 16384, BST: 32768, BER: 65536 };
 
-// 80 Luck = 30 - 33
-// 70 Luck = 29 - 32
-// 60 Luck = 27 - 32
-exports.LuckValues = [ [5, 10], [10, 15], [15, 20], [20, 25], [22, 27], [25, 30], [27, 32], [29, 32], [30, 33] ];
+// 250 Luck = 47% -> 50%
+// 200 Luck = 42% -> 45%
+// 150 Luck = 37% -> 40%
+//  80 Luck = 30% -> 33%
+//  70 Luck = 29% -> 32%
+//  60 Luck = 27% -> 32%
+exports.LuckValues = [ [5, 10], [10, 15], [15, 20], [20, 25], [22, 27], [25, 30], [27, 32], [29, 32], [30, 33], [31, 34], [32, 35], [33, 36], [34, 37], [35, 38], [36, 39], [37, 40], [38, 41], [39, 42], [40, 43], [41, 44], [42, 45], [43, 46], [44, 47], [45, 48], [46, 49], [47, 50] ];
 
 exports.MaxHitsTypes = { OUTGOING: 4, MATCHING: 7 };
 
@@ -59,9 +62,8 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
     beforeCritDamage += Math.trunc(beforeCritDamage * finalEffects.spa302 / 100);
   }
 
-  // SPA 296 increases in effect when SPA 297 is present
+  // SPA 296 amount is based on effective damage
   let spa296 = Math.trunc(finalEffects.spa296 * effectiveDamage / 100);
-  spa296 *= (finalEffects.spa297 > 0) ? 2 : 1;
 
   // SPA 296, 297, and 303 all crit as well
   beforeCritDamage += spa296 + finalEffects.spa297 + Math.trunc(finalEffects.spa303 / ticks);
@@ -85,9 +87,8 @@ exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck
   // SPA 461 for a Nuke will focus all damage to this point
   total += isNuke ? Math.trunc(total * finalEffects.spa461 / 100) : 0;
 
-  // SPA 483 increases in effect when SPA 484 is present
+  // SPA 483 amount is based on effective damage
   let spa483 = Math.trunc(finalEffects.spa483 * effectiveDamage / 100);
-  spa483 *= (finalEffects.spa484 > 0) ? 2 : 1;
 
   // SPA 462, 483, 484 and 507 are added to the end and not focused by anything else
   total += spa483 + Math.trunc(finalEffects.spa462 / ticks) + Math.trunc(finalEffects.spa484 / ticks);
