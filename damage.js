@@ -21,12 +21,6 @@ exports.randomInRange = (x, y) =>
   return Math.floor(Math.random() * (high - low + 1)) + low;
 }
 
-exports.calculateBaseNukeCritChance = (playerClass, baseNukeCritChance) =>
-{
-  // wizards have base crit chance between 1% and 3%
-  return baseNukeCritChance + (playerClass === exports.Classes.WIZ ? Math.ceil(Math.random() * 3.0) : 0);
-}
-
 exports.calculateDamage = (playerLevel, wornSpellDamage, spell, baseDamage, luck, isNuke, ticks, finalEffects) =>
 { 
   // SPA 413 focuses base damage but is rounded differently for DoTs

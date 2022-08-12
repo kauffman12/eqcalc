@@ -282,7 +282,7 @@ class PlayerState
     let finalEffects = this.effectsBuilder.buildEffects(spell, this.level, inTwincast);
     finalEffects.doTCritChance += this.baseDoTCritChance;
     finalEffects.doTCritMultiplier += this.baseDoTCritMultiplier;
-    finalEffects.nukeCritChance += Damage.calculateBaseNukeCritChance(this.playerClass, this.baseNukeCritChance);
+    finalEffects.nukeCritChance += this.baseNukeCritChance;
     finalEffects.nukeCritMultiplier += this.baseNukeCritMultiplier;
 
     // update luck chance

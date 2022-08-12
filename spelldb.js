@@ -118,6 +118,7 @@ class SpellDatabase
     this.spellGroups = new Map();
     this.bestSpellInGroup = new Map();
     this.cache = new Map();
+    this.classSpells = [];
 
     let aas = require('./data/AA' + playerClass + '.json');
     if (aas && aas.length > 0)
@@ -134,6 +135,11 @@ class SpellDatabase
         let spell = this.spells[prop];
         if (spell && spell.group > 0)
         {
+          if (((spell.classMask & playerClass) == playerClass) && spell.level <= 250)
+          {
+            this.classSpells.push(spell);
+          }
+
           let list = this.spellGroups.get(spell.group) || new Set();
           list.add(spell.id);
           this.spellGroups.set(spell.group, list);
@@ -145,6 +151,9 @@ class SpellDatabase
           }
         }
       });
+
+      // sort by name
+      this.classSpells = this.classSpells.sort((a, b) => (b.level - a.level) || a.name.localeCompare(b.name));
     }
   }
 
@@ -182,6 +191,11 @@ class SpellDatabase
   {
     let key = id + '-' + rank;
     return this.aas.has(key) ? new AA(this.aas.get(key)) : undefined;
+  }
+
+  getClassSpells()
+  {
+    return this.classSpells;
   }
 
   getSpell(id)
